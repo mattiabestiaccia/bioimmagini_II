@@ -9,6 +9,7 @@ Questo modulo fornisce funzioni per:
 """
 
 import logging
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -16,6 +17,22 @@ import numpy as np
 import pydicom
 from scipy import ndimage
 import scipy.io
+
+# Import centralizzato del modulo DICOM
+try:
+    # Prova import relativo (quando es_3 è package installato)
+    from dicom_import import read_dicom_series, extract_metadata
+except ImportError:
+    # Fallback: aggiungi src/ al path e importa
+    project_root = Path(__file__).parent.parent.parent.parent.parent
+    src_path = project_root / "src"
+    if src_path.exists():
+        sys.path.insert(0, str(src_path))
+        from dicom_import import read_dicom_series, extract_metadata
+    else:
+        # Se non disponibile, usa implementazione locale (backward compatibility)
+        read_dicom_series = None
+        extract_metadata = None
 
 from .exceptions import (
     DataLoadError,
@@ -43,6 +60,9 @@ def load_perfusion_series(
 ) -> tuple[ImageStack, TriggerTimes]:
     """
     Carica una serie temporale di immagini DICOM di perfusione.
+
+    Usa il modulo centralizzato dicom_import se disponibile, altrimenti
+    fallback all'implementazione locale.
 
     Parameters
     ----------
@@ -73,6 +93,63 @@ def load_perfusion_series(
     """
     logger.info(f"Loading DICOM series from: {dicom_dir}")
 
+    # Usa modulo centralizzato se disponibile
+    if read_dicom_series is not None:
+        return _load_perfusion_series_centralized(dicom_dir, n_frames)
+    else:
+        logger.warning("Using local DICOM loading (dicom_import module not available)")
+        return _load_perfusion_series_local(dicom_dir, n_frames)
+
+
+def _load_perfusion_series_centralized(
+    dicom_dir: Path,
+    n_frames: int | None = None
+) -> tuple[ImageStack, TriggerTimes]:
+    """
+    Implementazione usando il modulo dicom_import centralizzato.
+    """
+    try:
+        # Carica la serie completa usando il modulo centralizzato
+        volume, datasets = read_dicom_series(
+            directory=dicom_dir,
+            series_uid=None,  # Carica la prima serie trovata
+            sort_by_position=False  # Non ordinare per posizione spaziale (già ordinati per tempo)
+        )
+
+        # Limita al numero di frame richiesto
+        if n_frames is not None and n_frames < volume.shape[0]:
+            volume = volume[:n_frames, :, :]
+            datasets = datasets[:n_frames]
+
+        # Transposta per avere (H, W, T) invece di (T, H, W)
+        image_stack = np.transpose(volume, (1, 2, 0)).astype(np.float32)
+
+        # Estrai trigger times dai metadata
+        trigger_times = np.zeros(len(datasets), dtype=np.float32)
+        for i, ds in enumerate(datasets):
+            if hasattr(ds, "TriggerTime"):
+                trigger_times[i] = ds.TriggerTime / 1000.0  # ms -> s
+            else:
+                # Stima approssimativa
+                if i == 0:
+                    logger.warning("TriggerTime tag not found, using estimated times")
+                trigger_times[i] = i * 0.8
+
+        logger.info(f"Successfully loaded {image_stack.shape[2]} frames using centralized module")
+        return image_stack, trigger_times
+
+    except Exception as e:
+        logger.error(f"Centralized loading failed: {e}, falling back to local implementation")
+        return _load_perfusion_series_local(dicom_dir, n_frames)
+
+
+def _load_perfusion_series_local(
+    dicom_dir: Path,
+    n_frames: int | None = None
+) -> tuple[ImageStack, TriggerTimes]:
+    """
+    Implementazione locale (backward compatibility).
+    """
     if not dicom_dir.exists():
         error_msg = f"DICOM directory does not exist: {dicom_dir}"
         logger.error(error_msg)

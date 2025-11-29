@@ -29,6 +29,62 @@ from utils import (
     rayleigh_correction_factor
 )
 
+# Try to import centralized DICOM module
+try:
+    project_root = Path(__file__).parent.parent.parent.parent.parent
+    src_path = project_root / "src"
+    if src_path.exists():
+        sys.path.insert(0, str(src_path))
+        from dicom_import import read_dicom_file, extract_metadata
+        DICOM_IMPORT_AVAILABLE = True
+    else:
+        DICOM_IMPORT_AVAILABLE = False
+except ImportError:
+    DICOM_IMPORT_AVAILABLE = False
+
+
+def load_dicom_image(dicom_path: Path) -> Tuple[np.ndarray, dict]:
+    """
+    Load DICOM image using centralized module if available.
+
+    Parameters
+    ----------
+    dicom_path : Path
+        Path to DICOM file
+
+    Returns
+    -------
+    image : np.ndarray
+        Pixel array as float
+    metadata : dict
+        Dictionary with DICOM metadata
+    """
+    if DICOM_IMPORT_AVAILABLE:
+        try:
+            pixel_data, ds = read_dicom_file(dicom_path)
+            metadata = extract_metadata(ds)
+            return pixel_data.astype(float), metadata
+        except Exception as e:
+            print(f"Centralized DICOM loading failed: {e}, using fallback")
+
+    # Fallback to direct pydicom
+    dcm = pydicom.dcmread(dicom_path)
+    metadata = {
+        'patient': {
+            'patient_name': str(dcm.get('PatientName', 'N/A')),
+            'patient_id': str(dcm.get('PatientID', 'N/A')),
+        },
+        'study': {
+            'study_date': str(dcm.get('StudyDate', 'N/A')),
+            'study_description': str(dcm.get('StudyDescription', 'N/A')),
+        },
+        'image': {
+            'rows': int(dcm.get('Rows', 0)),
+            'columns': int(dcm.get('Columns', 0)),
+        }
+    }
+    return dcm.pixel_array.astype(float), metadata
+
 
 class ROISelector:
     """Interactive ROI selection tool for circular regions."""
@@ -294,13 +350,14 @@ def main(dicom_path: Path, output_dir: Path = None, interactive: bool = False, s
 
     # Load DICOM image
     print(f"\nLoading DICOM: {dicom_path.name}")
-    dcm = pydicom.dcmread(dicom_path)
-    image = dcm.pixel_array.astype(float)
+    if DICOM_IMPORT_AVAILABLE:
+        print("  Using centralized dicom_import module")
+    image, metadata = load_dicom_image(dicom_path)
 
     print(f"  Image shape: {image.shape}")
     print(f"  Intensity range: [{image.min():.1f}, {image.max():.1f}]")
-    print(f"  Patient: {dcm.get('PatientName', 'N/A')}")
-    print(f"  Study Date: {dcm.get('StudyDate', 'N/A')}")
+    print(f"  Patient: {metadata['patient'].get('patient_name', 'N/A')}")
+    print(f"  Study Date: {metadata['study'].get('study_date', 'N/A')}")
 
     # Section 1: Manual ROI analysis
     print("\n" + "=" * 70)
