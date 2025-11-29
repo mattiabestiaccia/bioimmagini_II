@@ -2,6 +2,7 @@
 Utility per caricamento e gestione di immagini DICOM CT.
 
 Gestisce la conversione corretta dei valori HU usando Rescale Intercept e Slope.
+Integra il modulo dicom_import centralizzato con fallback locale.
 """
 
 import numpy as np
@@ -9,6 +10,23 @@ import pydicom
 from pathlib import Path
 from typing import Tuple, Dict, Any
 from scipy import ndimage
+import sys
+
+# Try to import centralized dicom_import module
+try:
+    project_root = Path(__file__).parent.parent.parent.parent.parent
+    src_path = project_root / "src"
+    if src_path.exists():
+        sys.path.insert(0, str(src_path))
+        from dicom_import import read_dicom_series, extract_metadata
+        DICOM_IMPORT_AVAILABLE = True
+    else:
+        DICOM_IMPORT_AVAILABLE = False
+except ImportError:
+    DICOM_IMPORT_AVAILABLE = False
+
+from .exceptions import DICOMReadError, IsotropyError, ValidationError
+from .types import Volume3D, DicomMetadata, VoxelSpacing
 
 # Funzioni principali
 def load_dicom_volume(series_path: str) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -16,7 +34,7 @@ def load_dicom_volume(series_path: str) -> Tuple[np.ndarray, Dict[str, Any]]:
     Carica un volume 3D DICOM da una directory.
 
     Applica correttamente Rescale Intercept e Slope per ottenere valori HU.
-    MATLAB's dicomread ignora questi campi fino alla versione 2021b.
+    Usa il modulo dicom_import centralizzato se disponibile, altrimenti fallback locale.
 
     Parameters
     ----------
@@ -37,13 +55,67 @@ def load_dicom_volume(series_path: str) -> Tuple[np.ndarray, Dict[str, Any]]:
 
     Il volume è ordinato per Instance Number crescente.
     """
+    # Try centralized module first
+    if DICOM_IMPORT_AVAILABLE:
+        try:
+            return _load_dicom_volume_centralized(series_path)
+        except Exception as e:
+            print(f"Centralized DICOM loading failed: {e}")
+            print("Falling back to local implementation...")
+
+    # Fallback to local implementation
+    return _load_dicom_volume_local(series_path)
+
+
+def _load_dicom_volume_centralized(series_path: str) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Load DICOM volume using centralized dicom_import module."""
+    series_dir = Path(series_path)
+
+    # Use centralized read_dicom_series
+    volume, datasets = read_dicom_series(series_dir, sort_by_position=True)
+
+    if len(datasets) == 0:
+        raise DICOMReadError(str(series_dir), "No DICOM files found")
+
+    # Extract metadata from first slice
+    first_ds = datasets[0]
+
+    metadata = {
+        'PixelSpacing': [float(x) for x in first_ds.PixelSpacing] if hasattr(first_ds, 'PixelSpacing') else [1.0, 1.0],
+        'SliceThickness': float(first_ds.SliceThickness) if hasattr(first_ds, 'SliceThickness') else None,
+        'RescaleIntercept': float(first_ds.RescaleIntercept) if hasattr(first_ds, 'RescaleIntercept') else 0.0,
+        'RescaleSlope': float(first_ds.RescaleSlope) if hasattr(first_ds, 'RescaleSlope') else 1.0,
+        'RescaleType': first_ds.RescaleType if hasattr(first_ds, 'RescaleType') else None,
+        'WindowCenter': first_ds.WindowCenter if hasattr(first_ds, 'WindowCenter') else None,
+        'WindowWidth': first_ds.WindowWidth if hasattr(first_ds, 'WindowWidth') else None,
+        'Rows': int(first_ds.Rows),
+        'Columns': int(first_ds.Columns),
+        'NumSlices': len(datasets),
+    }
+
+    # Calculate SliceThickness from SliceLocation if needed
+    if metadata['SliceThickness'] is None and len(datasets) > 1:
+        if hasattr(datasets[0], 'SliceLocation') and hasattr(datasets[1], 'SliceLocation'):
+            metadata['SliceThickness'] = abs(
+                float(datasets[1].SliceLocation) - float(datasets[0].SliceLocation)
+            )
+
+    print(f"Volume caricato (centralized): {volume.shape}")
+    print(f"Spacing: {metadata['PixelSpacing']} mm (x,y), {metadata['SliceThickness']} mm (z)")
+    print(f"Range HU: [{volume.min():.1f}, {volume.max():.1f}]")
+
+    return volume.astype(np.float64), metadata
+
+
+def _load_dicom_volume_local(series_path: str) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Load DICOM volume using local implementation (fallback)."""
     series_dir = Path(series_path)
 
     # Trova tutti i file DICOM
     dicom_files = sorted(series_dir.glob("*.dcm"))
 
     if not dicom_files:
-        raise ValueError(f"Nessun file DICOM trovato in {series_path}")
+        raise DICOMReadError(str(series_path), "No DICOM files found")
 
     # Leggi tutti i DICOM e ordina per Instance Number
     slices = []
@@ -99,7 +171,7 @@ def load_dicom_volume(series_path: str) -> Tuple[np.ndarray, Dict[str, Any]]:
 
         volume[:, :, i] = hu_values
 
-    print(f"Volume caricato: {volume.shape}")
+    print(f"Volume caricato (local): {volume.shape}")
     print(f"Spacing: {metadata['PixelSpacing']} mm (x,y), {metadata['SliceThickness']} mm (z)")
     print(f"Range HU: [{volume.min():.1f}, {volume.max():.1f}]")
     print(f"Rescale: intercept={intercept}, slope={slope}, type={metadata['RescaleType']}")
