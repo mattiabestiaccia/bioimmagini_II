@@ -1,0 +1,427 @@
+# Esercitazione 2 - Filtraggio 3D su Immagini CT
+
+**Data**: 16 Marzo 2022
+**Topic**: Algoritmi di filtraggio 3D, SNR, Conservazione transizioni
+**Dataset**: RIDER Phantom PET-CT
+
+## Obiettivi
+
+Realizzare un programma che consenta di valutare vari algoritmi di filtraggio 3D su un fantoccio CT in termini di:
+- **CNR** (Contrast-to-Noise Ratio)
+- **Conservazione delle transizioni** (edge sharpness)
+
+Il fantoccio utilizzato è un fantoccio TAC-PET per il controllo di qualità in macchine ibride.
+
+## Dataset
+
+**Fonte**: [RIDER Phantom PET-CT](https://wiki.cancerimagingarchive.net/display/Public/RIDER+Phantom+PET-CT)
+
+Nella directory `Phantom_CT_PET` sono presenti tre serie DICOM:
+- **Serie 1**: CT SCOUT HEAD (localizer)
+- **Serie 2**: CT 2.5mm (63 slices) ← **Usata in questa esercitazione**
+- **Serie 401**: 3D FBP PET
+
+### Caratteristiche Immagini CT
+
+- **Formato**: DICOM unsigned 16-bit integer
+- **Scala**: Hounsfield Units (HU)
+- **Range valori**:
+  - Zero padding: -3024 HU
+  - Aria: ~-1000 HU
+  - Fantoccio: ~60 HU
+
+### Conversione HU
+
+MATLAB's `dicomread` ignora erroneamente i campi `RescaleIntercept` e `RescaleSlope` (fino alla versione 2021b).
+
+La conversione corretta è:
+```
+HU = RescaleIntercept + RescaleSlope * PixelValue
+```
+
+**pydicom** in Python gestisce correttamente questi campi, ma abbiamo implementato la conversione esplicita per chiarezza didattica.
+
+## Teoria
+
+### Filtraggio 3D
+
+I filtri 3D operano su volumi con kernel cubici (es. 7×7×7) per ridurre il rumore preservando le strutture anatomiche.
+
+#### 1. Filtro a Media Mobile 3D
+
+Il filtro più semplice: sostituisce ogni voxel con la media dei voxel nella sua vicinanza.
+
+**Formula**:
+```
+I_filtered(x,y,z) = (1/N) Σ I(x+i, y+j, z+k)
+```
+
+dove la somma è su tutti i voxel nel kernel N×N×N.
+
+**Caratteristiche**:
+- ✅ Riduce efficacemente il rumore
+- ❌ Sfoca i contorni (perde acutezza)
+- Equivalente MATLAB: `fspecial3('average')` + `imfilter`
+
+#### 2. Filtro Gaussiano 3D
+
+Filtro a media pesata con pesi Gaussiani (più peso al centro, meno in periferia).
+
+**Kernel Gaussiano 3D**:
+```
+G(x,y,z) = (1/(2πσ²)^(3/2)) * exp(-(x² + y² + z²)/(2σ²))
+```
+
+dove σ è la deviazione standard che controlla la "larghezza" del filtro.
+
+**Caratteristiche**:
+- ✅ Riduce il rumore mantenendo meglio i contorni rispetto alla media mobile
+- ✅ Regolabile con σ (sigma piccolo = meno smoothing)
+- Equivalente MATLAB: `imgaussfilt3(volume, sigma)`
+
+**Ottimizzazione σ**: Il valore ottimale di σ massimizza SNR conservando le transizioni.
+
+#### 3. Filtro Wiener Adattivo 3D
+
+Filtro intelligente che si adatta localmente: filtra di più nelle aree omogenee, preserva i contorni.
+
+**Formula**:
+```
+I_W = I_MM + α(I_OR - I_MM)
+```
+
+dove:
+- `I_OR` = immagine originale
+- `I_MM` = immagine filtrata a media mobile
+- `α` = coefficiente adattivo
+
+**Coefficiente α**:
+```
+α = (I_VAR - σ²) / I_VAR    se I_VAR ≥ σ²
+α = 0                        altrove
+```
+
+dove:
+- `I_VAR` = varianza locale (mappa 3D)
+- `σ²` = varianza del rumore stimata
+
+**Comportamento**:
+- Aree omogenee (`I_VAR ≈ σ²`): α ≈ 0 → applica media mobile
+- Contorni (`I_VAR >> σ²`): α ≈ 1 → preserva l'immagine originale
+- Regioni con `I_VAR < σ²`: α = 0 → media mobile
+
+**NOTA**: MATLAB ha solo `wiener2` (2D). Implementiamo la versione 3D da zero.
+
+### Metriche di Qualità
+
+#### SNR (Signal-to-Noise Ratio)
+
+Misura il rapporto tra segnale e rumore in una ROI omogenea.
+
+**Formula**:
+```
+SNR = μ / σ
+```
+
+dove:
+- μ = media del segnale nella ROI
+- σ = deviazione standard del rumore nella ROI
+
+**Interpretazione**:
+- SNR alto = immagine più pulita
+- Il filtraggio dovrebbe aumentare l'SNR
+
+#### Acutezza delle Transizioni
+
+Misura quanto sono nitidi i contorni dopo il filtraggio.
+
+Estraiamo un profilo 1D perpendicolare al bordo del fantoccio e calcoliamo:
+
+**Metodo 1 - Massimo Gradiente**:
+```
+Acutezza = max(|dI/dx|)
+```
+
+**Metodo 2 - Larghezza Transizione 10%-90%**:
+```
+Acutezza = 1 / width_{10-90}
+```
+
+**Interpretazione**:
+- Acutezza alta = contorni nitidi
+- Il filtraggio tende a ridurre l'acutezza
+- Bilanciamento SNR vs Acutezza
+
+### Volume Isotropo
+
+Le immagini CT spesso hanno spacing diverso in (x,y) vs z:
+- In-plane: 0.5-1 mm
+- Slice thickness: 2.5-5 mm
+
+Per filtraggio 3D efficace serve **volume isotropo** (voxel cubici).
+
+**Interpolazione Trilineare**: ridimensiona il volume per ottenere spacing uguale in tutte le direzioni.
+
+**Equivalente MATLAB**: `interp3`, `meshgrid`, `imresize3`
+
+## Struttura del Codice
+
+```
+esercitazione_2_filtraggio/
+├── src/
+│   ├── __init__.py
+│   ├── dicom_utils.py              # Caricamento DICOM e interpolazione
+│   ├── filters_3d.py               # Filtri 3D (media, gaussiano, wiener)
+│   ├── metrics.py                  # SNR, acutezza, ROI selection
+│   ├── main_filtering.py           # Script principale
+│   └── interactive_roi_selection.py # Tool interattivo per ROI
+├── data/
+│   └── Phantom_CT_PET/             # Link simbolico ai dati DICOM
+├── results/                        # Output (plot, tabelle)
+├── tests/
+└── README.md
+```
+
+## Moduli Python
+
+### dicom_utils.py
+
+Funzioni per gestione DICOM:
+
+- **`load_dicom_volume(path)`**: Carica volume 3D con conversione HU corretta
+- **`make_isotropic(volume, metadata)`**: Interpolazione trilineare per volume isotropo
+- **`check_isotropy(metadata)`**: Verifica se il volume è già isotropo
+
+### filters_3d.py
+
+Implementazione filtri 3D:
+
+- **`moving_average_filter_3d(volume, kernel_size)`**: Filtro a media mobile
+- **`gaussian_filter_3d(volume, kernel_size, sigma)`**: Filtro Gaussiano
+- **`wiener_filter_3d(volume, kernel_size, noise_variance)`**: Filtro Wiener adattivo
+- **`stdfilt3(volume, kernel_size)`**: Deviazione standard locale 3D
+- **`variance_map_3d(volume, kernel_size)`**: Mappa di varianza locale
+- **`estimate_noise_variance(volume, roi_mask)`**: Stima varianza rumore
+
+### metrics.py
+
+Calcolo metriche di qualità:
+
+- **`calculate_snr(image, roi_mask)`**: Calcola SNR in una ROI
+- **`calculate_cnr(image, roi1, roi2)`**: Calcola CNR tra due ROI
+- **`create_circular_roi(shape, center, radius)`**: Crea ROI circolare
+- **`extract_profile(image, start, end)`**: Estrae profilo lineare
+- **`calculate_edge_sharpness(profile, method)`**: Calcola acutezza transizione
+
+## Usage
+
+### 1. Selezione Interattiva ROI e Profilo
+
+Prima di eseguire l'esercitazione, usa lo script interattivo per selezionare:
+- Centro e raggio della ROI (area omogenea del fantoccio)
+- Punti iniziale/finale del profilo (perpendicolare al bordo)
+
+```bash
+cd esercitazioni/esercitazioni_python/esercitazione_2_filtraggio
+python src/interactive_roi_selection.py
+```
+
+Copia i parametri stampati in `main_filtering.py`.
+
+### 2. Esecuzione Esercitazione Completa
+
+```bash
+python src/main_filtering.py
+```
+
+**Output**:
+- Tabella con SNR e acutezza per ogni filtro
+- Plot confronto slice filtrate
+- Plot confronto profili
+- Plot differenze rispetto all'originale
+- Plot ottimizzazione sigma Gaussiano
+
+### 3. Risultati Attesi
+
+Il programma produce una tabella come:
+
+```
+Immagine             SNR          Acutezza
+------------------------------------------------------------
+Originale            15.23        0.0842
+Media Mobile         28.45        0.0521
+Gaussiano            26.78        0.0687
+Wiener               24.92        0.0745
+------------------------------------------------------------
+```
+
+**Interpretazione**:
+- Tutti i filtri aumentano l'SNR
+- Media mobile: massimo SNR ma minima acutezza (sfuma i contorni)
+- Gaussiano: buon compromesso (con σ ottimizzato)
+- Wiener: preserva meglio i contorni mantenendo buon SNR
+
+## Workflow dell'Esercitazione
+
+```
+1. Caricamento DICOM
+   └─> Applicazione RescaleIntercept/Slope per HU corretti
+
+2. Verifica Isotropia
+   └─> Se anisotropo: interpolazione trilineare
+
+3. Definizione ROI e Profilo
+   └─> Interattivo o parametri predefiniti
+
+4. Stima Rumore
+   └─> Varianza σ² nella ROI omogenea
+
+5. Applicazione Filtri
+   ├─> Media Mobile 7×7×7
+   ├─> Gaussiano 7×7×7 (ottimizzazione σ)
+   └─> Wiener 7×7×7 (con σ² stimato)
+
+6. Calcolo Metriche
+   ├─> SNR sulla slice centrale
+   └─> Acutezza sul profilo
+
+7. Visualizzazione e Analisi
+   ├─> Confronto visivo slice
+   ├─> Confronto profili
+   ├─> Differenze
+   └─> Tabella risultati
+```
+
+## Dipendenze
+
+```python
+numpy>=1.21.0
+scipy>=1.7.0
+matplotlib>=3.4.0
+pydicom>=2.2.0
+```
+
+Installazione (se non già fatto):
+```bash
+cd ../../..  # Root del progetto
+source esercitazioni/esercitazioni_python/venv/bin/activate
+pip install numpy scipy matplotlib pydicom
+```
+
+## Implementazione Chiave: Filtro Wiener 3D
+
+Il filtro Wiener non esiste in 3D in MATLAB (`wiener2` è solo 2D). Implementiamo da zero:
+
+```python
+def wiener_filter_3d(volume, kernel_size, noise_variance):
+    # 1. Calcola media mobile
+    I_MM = moving_average_filter_3d(volume, kernel_size)
+
+    # 2. Calcola mappa varianza locale
+    I_VAR = variance_map_3d(volume, kernel_size)
+
+    # 3. Calcola coefficiente α
+    alpha = np.zeros_like(I_VAR)
+    mask = I_VAR >= noise_variance
+    alpha[mask] = (I_VAR[mask] - noise_variance) / I_VAR[mask]
+
+    # 4. Applica Wiener
+    I_W = I_MM + alpha * (volume - I_MM)
+
+    return I_W
+```
+
+**Nota**: Aggiungiamo epsilon per evitare divisione per zero in regioni di zero-padding.
+
+## Calcolo Efficiente Varianza Locale (stdfilt3)
+
+MATLAB ha `stdfilt` solo in 2D. Implementiamo versione 3D efficiente:
+
+```python
+def stdfilt3(volume, kernel_size):
+    # Usa: Var(X) = E[X²] - E[X]²
+    mean_local = uniform_filter(volume, kernel_size)
+    mean_of_squares = uniform_filter(volume**2, kernel_size)
+    variance = mean_of_squares - mean_local**2
+    std = np.sqrt(np.maximum(variance, 0))
+    return std
+```
+
+Questo è **molto più veloce** di una implementazione naive con loop.
+
+## Ottimizzazione Sigma Gaussiano
+
+Il filtro Gaussiano ha un parametro σ da ottimizzare. Testiamo range di σ:
+
+```python
+sigma_range = np.linspace(0.5, 3.0, 20)
+
+for sigma in sigma_range:
+    filtered = gaussian_filter_3d(volume, sigma=sigma)
+    snr = calculate_snr(filtered, roi)
+    sharpness = calculate_edge_sharpness(profile)
+
+# Massimizza: objective = 0.7 * SNR + 0.3 * Sharpness
+```
+
+**Risultato**: Plot di SNR e acutezza vs σ per trovare il migliore.
+
+## Differenze Python vs MATLAB
+
+| Operazione | MATLAB | Python |
+|------------|--------|--------|
+| Caricamento DICOM | `dicomread` (buggy HU) | `pydicom.dcmread` |
+| Filtro media 3D | `fspecial3` + `imfilter` | `scipy.ndimage.uniform_filter` |
+| Filtro Gaussiano 3D | `imgaussfilt3` | `scipy.ndimage.gaussian_filter` |
+| Filtro Wiener 3D | **Non disponibile** | Implementato da zero |
+| Varianza locale 3D | **Non disponibile** | `stdfilt3` custom |
+| Interpolazione 3D | `interp3`, `meshgrid` | `scipy.ndimage.zoom` |
+
+## Testing
+
+Script di test per validare i filtri:
+
+```bash
+python -m pytest tests/
+```
+
+(TODO: Aggiungere unit tests)
+
+## Estensioni Possibili
+
+1. **Più filtri**:
+   - Bilateral filter 3D
+   - Non-Local Means 3D
+   - Anisotropic diffusion
+
+2. **Ottimizzazione kernel size**:
+   - Testare 5×5×5, 7×7×7, 9×9×9
+
+3. **Valutazione su tutto il volume**:
+   - SNR medio su tutte le slice
+   - Istogrammi differenze
+
+4. **Confronto con immagine PET**:
+   - Applicare filtri anche alla serie 401
+
+## References
+
+1. RIDER Phantom PET-CT Dataset:
+   https://wiki.cancerimagingarchive.net/display/Public/RIDER+Phantom+PET-CT
+
+2. Hounsfield Units (HU):
+   https://radiopaedia.org/articles/hounsfield-unit
+
+3. Wiener Filter Theory:
+   - Gonzalez & Woods, "Digital Image Processing", Cap. 5
+
+4. DICOM Rescale Tags:
+   - Tag (0028,1052): Rescale Intercept
+   - Tag (0028,1053): Rescale Slope
+   - Tag (0028,1054): Rescale Type
+
+## Autore
+
+Bioimmagini - Positano
+Esercitazione 2 - 16 Marzo 2022
+Conversione Python: 2025

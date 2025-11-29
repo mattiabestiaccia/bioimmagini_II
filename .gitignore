@@ -48,6 +48,11 @@ docs/_build/
 data/raw/
 data/processed/
 
+# Large files (>100MB - GitHub limit)
+*.zip
+DATA.zip
+esercitazioni/esercitazioni_matlab/ESERCITAZIONE_23_25_05_2022*/DATA.zip
+
 # Dispense e materiale didattico
 dispense/
 *.ppt
