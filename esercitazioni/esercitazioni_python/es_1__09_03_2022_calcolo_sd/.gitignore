@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Results and outputs
+results/*
+!results/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (keep structure, ignore large files)
+data/*.dcm
+!data/phantom.dcm
+!data/IMG-*.dcm
+
+# LGE data - keep README, optionally track DICOM files
+data/esempio_LGE/**/*.dcm
+!data/esempio_LGE/README.md

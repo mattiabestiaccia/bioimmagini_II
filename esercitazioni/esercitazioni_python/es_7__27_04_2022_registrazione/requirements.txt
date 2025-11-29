@@ -1,0 +1,18 @@
+# Requirements per Esercitazione 7: Registrazione Immagini
+# Installazione: pip install -r requirements.txt
+
+# Core
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Machine learning
+scikit-learn>=1.3.0
+
+# Image processing
+scikit-image>=0.21.0
+
+# Medical imaging (MINC format)
+nibabel>=5.1.0
+
+# Visualization
+matplotlib>=3.7.0

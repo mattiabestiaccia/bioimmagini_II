@@ -1,0 +1,22 @@
+# Requirements per Esercitazione 6: Analisi Albero Bronchiale
+# Installazione: pip install -r requirements.txt
+
+# Core scientific computing
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Image processing
+scikit-image>=0.21.0
+
+# Medical imaging
+pydicom>=2.4.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Optional: 3D visualization
+# mayavi>=4.8.0
+# vtk>=9.2.0
+
+# Optional: progress bars
+tqdm>=4.65.0
