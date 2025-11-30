@@ -1,0 +1,380 @@
+# Esercitazione 7: Registrazione Immagini con Algoritmi Genetici
+
+## Descrizione
+
+Implementazione di **registrazione automatica** di immagini MRI usando:
+- **Synthetic data** da BrainWeb (phantom simulato)
+- **Differential Evolution** (GA-like optimizer)
+- **Mutual Information** come metrica di similitudine
+- **Validazione quantitativa** con Bland-Altman plots
+
+## Dataset: BrainWeb Synthetic Phantom
+
+**Source**: https://brainweb.bic.mni.mcgill.ca/
+
+BrainWeb e' un simulatore MRI cerebrale che genera immagini sintetiche partendo da atlante anatomico + fisica MRI.
+
+**Vantaggi synthetic data**:
+1. ✅ No consensi informati
+2. ✅ Ground truth perfettamente noto
+3. ✅ Parametri acquisizione variabili (SNR, CNR, thickness, RF inhomogeneity)
+4. ✅ Validazione algoritmi senza variabilita' inter/intra-osservatore
+
+**Dataset usato**:
+- `t1_icbm_normal_1mm_pn3_rf0.mnc` (T1-weighted)
+- `pd_icbm_normal_1mm_pn3_rf0.mnc` (Proton Density)
+- Formato MINC (Montreal Neurological Institute)
+- Slice 62 (centrale, 2D per velocita')
+- Zero padding a matrice quadrata
+
+---
+
+## Pipeline
+
+```
+T1 (Fixed) + PD (Moving)
+        ↓
+Estrai slice 62 + zero padding
+        ↓
+Calcola MI_start (baseline)
+        ↓
+[SIMULAZIONE] Random rigid transform → PD_misaligned
+        ↓
+Calcola MI_misaligned (dovrebbe essere < MI_start)
+        ↓
+[REGISTRAZIONE] Differential Evolution + MI → Parametri ottimali
+        ↓
+Applica trasformazione → PD_registered
+        ↓
+Calcola MI_end (dovrebbe essere ≈ MI_start)
+        ↓
+Validazione: Psim ≈ -Preg, MI_end ≈ MI_start
+```
+
+---
+
+## Basi Teoriche
+
+### Registrazione Immagini
+
+**Obiettivo**: Trovare trasformazione T che allinea immagine mobile I₂ a immagine fissa I₁.
+
+**Componenti**:
+1. **Search space**: Parametri trasformazione (tx, ty, θ per rigida 2D)
+2. **Metrica**: Misura similitudine (Mutual Information)
+3. **Ottimizzatore**: Algoritmo ricerca (Genetic Algorithm / Differential Evolution)
+
+### Trasformazione Rigida 2D
+
+Roto-traslazione con 3 DOF:
+
+```
+x' = x·cos(θ) - y·sin(θ) + tx
+y' = x·sin(θ) + y·cos(θ) + ty
+```
+
+In forma matriciale:
+```python
+T = [cos(θ)  -sin(θ)  tx]
+    [sin(θ)   cos(θ)  ty]
+```
+
+### Mutual Information (MI)
+
+Misura dipendenza statistica tra due variabili:
+
+```
+MI(I₁, I₂) = H(I₁) + H(I₂) - H(I₁, I₂)
+```
+
+Dove H e' entropia:
+```
+H(I) = -Σ p(i) · log(p(i))
+```
+
+**Proprieta'**:
+- MI = 0: Immagini indipendenti (non allineate)
+- MI massimo: Immagini perfettamente allineate
+- **Invariante** a trasformazioni monotone intensita' (ideale per multi-modal registration T1 vs PD)
+
+**Implementazione**:
+```python
+# Istogramma 2D
+hist_2d, _, _ = np.histogram2d(img1, img2, bins=256)
+pxy = hist_2d / np.sum(hist_2d)
+
+# Marginali
+px = np.sum(pxy, axis=1)
+py = np.sum(pxy, axis=0)
+
+# MI
+MI = np.sum(pxy[pxy>0] * np.log(pxy[pxy>0] / (px[:,None] * py[None,:])[pxy>0]))
+```
+
+### Differential Evolution (DE)
+
+Algoritmo ottimizzazione globale simile a GA, ma spesso superiore per problemi continui.
+
+**Pseudocodice**:
+```
+1. Inizializza popolazione P di N individui random in search space
+2. While not converged:
+   a. Per ogni individuo x_i:
+      - Mutation: v = x_r1 + F·(x_r2 - x_r3)  [F=0.5-1.0]
+      - Crossover: u_j = v_j se rand()<CR, altrimenti x_i,j  [CR=0.7]
+      - Selection: x_i = u se fitness(u) < fitness(x_i)
+   b. Update best individual
+3. Return best
+```
+
+**Vantaggi vs GA classico**:
+- ✅ Meno parametri da tuning
+- ✅ Convergenza piu' veloce per funzioni continue
+- ✅ Robusto a minimi locali
+
+### Bland-Altman Analysis
+
+Metodo standard per confronto metodi di misura.
+
+**Plot**: Differenza vs Media
+```
+x-axis: (True + Estimated) / 2
+y-axis: Estimated - True
+
+Linee:
+- Bias (mean difference)
+- Limits of Agreement: mean ± 1.96·SD
+```
+
+**Interpretazione**:
+- Bias ≈ 0: Nessun errore sistematico
+- LoA stretti: Alta precisione
+- Punti dentro LoA: 95% agreement
+
+---
+
+## Struttura Files
+
+```
+es_7__27_04_2022_registrazione/
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── data/
+│   └── minc/                  # BrainWeb MINC files
+│       ├── t1_icbm_normal_1mm_pn3_rf0.mnc (14 MB)
+│       ├── pd_icbm_normal_1mm_pn3_rf0.mnc (14 MB)
+│       └── t2_icbm_normal_1mm_pn3_rf0.mnc (14 MB)
+├── docs/
+│   ├── Esercitazione_08_27_04_2022.pdf
+│   ├── disImage2D.m           # MATLAB reference
+│   └── loadminc.m
+├── src/
+│   ├── __init__.py
+│   ├── utils.py               # Core functions (~400 lines)
+│   ├── registration_ga.py     # Single registration
+│   └── validate_registration.py  # N runs + Bland-Altman
+└── results/                   # Generated at runtime
+```
+
+---
+
+## Installazione
+
+```bash
+cd es_7__27_04_2022_registrazione
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+**Dipendenze chiave**:
+- `nibabel`: Lettura MINC
+- `scipy`: Differential Evolution optimizer
+- `scikit-learn`: Mutual Information (alternativa)
+
+---
+
+## Esecuzione
+
+### Single Registration
+
+```bash
+cd src
+python registration_ga.py
+```
+
+**Output**:
+- Console: Parametri simulati vs registrati, MI
+- `results/registration_result.png`: Visualizzazione 3 immagini
+- `results/registration_results.txt`: Report numerico
+
+### Validazione (N runs)
+
+```bash
+python validate_registration.py --n_runs 20 --maxiter 50
+```
+
+**Output**:
+- `results/bland_altman_20runs.png`: 4 plots (TX, TY, Angle, MI)
+- `results/validation_stats_20runs.txt`: Statistiche (bias, precision, LoA)
+
+---
+
+## Risultati Attesi
+
+**Single run**:
+- MI_start ≈ 0.79 (T1 vs PD aligned)
+- MI_misaligned ≈ 0.48 (dopo random transform)
+- MI_end ≈ 0.69-0.79 (dopo registrazione)
+- Errore traslazione: < 2 pixel
+- Errore rotazione: < 3°
+
+**Validation (20 runs)**:
+- Bias TX, TY, Angle ≈ 0
+- Precision (SD): ~1-2 pixel, ~2-3°
+- 95% punti dentro LoA
+
+---
+
+## Note Tecniche
+
+### Parametri Critici
+
+**Search space**:
+- Traslazione: ±dim/10 (±40 pixel per 400x400)
+- Rotazione: ±60°
+
+**Differential Evolution**:
+- `popsize=15`: Popolazione 15 individui
+- `maxiter=100`: Max 100 generazioni
+- `mutation=(0.5, 1.0)`: Factor mutazione
+- `recombination=0.7`: Crossover rate
+- `polish=True`: Refinement locale finale
+
+**Mutual Information**:
+- `bins=64`: Istogramma 64x64 (compromesso velocita'/accuratezza)
+- `normalized=True`: MI normalizzato in [0,1]
+- Interpolazione: Nearest Neighbor (ordine 0)
+
+### Performance
+
+- **Single registration**: ~10-30 secondi (dipende da convergenza)
+- **20 runs validation**: ~5-10 minuti
+
+### Limitazioni
+
+1. **2D only**: Estensione a 3D richiede 6 DOF (3 traslazioni + 3 rotazioni)
+2. **Rigid only**: Trasformazioni affini/deformabili richiedono piu' parametri
+3. **Nearest Neighbor**: Interpolazione lineare migliorerebbe accuracy ma rallenta
+4. **Single modality metric**: MI ottimale per multi-modal, ma NCC/SSD validi per mono-modal
+
+---
+
+## Troubleshooting
+
+### Problema: nibabel non trova file MINC
+
+**Soluzione**:
+```bash
+pip install --upgrade nibabel
+# Se persiste, converti MINC → NIfTI con minctools
+```
+
+### Problema: DE non converge (MI_end << MI_start)
+
+**Cause**:
+- Search space troppo stretto
+- maxiter troppo basso
+- Immagini troppo diverse
+
+**Soluzioni**:
+- Aumenta bounds traslazione
+- maxiter=200, popsize=20
+- Verifica immagini caricate correttamente
+
+### Problema: Errori grandi anche con MI_end alto
+
+**Cause**:
+- MI ha multipli massimi locali (simmetrie)
+- Interpolazione nearest neighbor introduce quantizzazione
+
+**Soluzioni**:
+- Aumenta bins MI (128 invece 64)
+- Usa polish=True per refinement
+- Prova multiple inizializzazioni
+
+---
+
+## Estensioni Possibili
+
+### 1. Registrazione 3D
+
+```python
+# 6 DOF: tx, ty, tz, θx, θy, θz
+bounds = [
+    (-max_trans, max_trans),  # tx
+    (-max_trans, max_trans),  # ty
+    (-max_trans, max_trans),  # tz
+    (-60, 60),  # rotation X
+    (-60, 60),  # rotation Y
+    (-60, 60)   # rotation Z
+]
+```
+
+### 2. Trasformazione Affine (12 DOF)
+
+```python
+# Matrice affine 3x4
+# 9 parametri transform + 3 traslazioni
+def apply_affine_transform(image, matrix):
+    from scipy.ndimage import affine_transform
+    return affine_transform(image, matrix[:3,:3], offset=matrix[:3,3])
+```
+
+### 3. Altre Metriche
+
+```python
+# Normalized Cross-Correlation (mono-modal)
+def ncc(img1, img2):
+    img1_norm = (img1 - img1.mean()) / img1.std()
+    img2_norm = (img2 - img2.mean()) / img2.std()
+    return np.mean(img1_norm * img2_norm)
+
+# Sum of Squared Differences
+def ssd(img1, img2):
+    return np.sum((img1 - img2)**2)
+```
+
+### 4. Deep Learning Registration
+
+```python
+# VoxelMorph, ANTs-inspired networks
+from voxelmorph import networks
+model = networks.VxmDense(input_shape, nb_features)
+```
+
+---
+
+## Riferimenti
+
+**Synthetic Data**:
+1. BrainWeb: https://brainweb.bic.mni.mcgill.ca/
+2. XCAT Phantom: https://www.hopkinsmedicine.org/radiology/research
+
+**Registration**:
+3. Mattes et al., "Nonrigid multimodality image registration", SPIE 2001
+4. Pluim et al., "Mutual-information-based registration of medical images: a survey", IEEE TMI 2003
+
+**Algorithms**:
+5. Storn & Price, "Differential Evolution - A Simple and Efficient Heuristic", J. Global Optimization 1997
+
+**Software**:
+6. ANTsPy: https://github.com/ANTsX/ANTsPy
+7. SimpleITK: https://simpleitk.org/
+
+---
+
+## License
+
+Materiale didattico. Solo uso accademico.

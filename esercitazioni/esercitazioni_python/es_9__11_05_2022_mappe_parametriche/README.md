@@ -1,0 +1,713 @@
+# Esercitazione 9: Mappe Parametriche T2*
+
+## Indice
+
+- [Introduzione](#introduzione)
+- [Teoria](#teoria)
+  - [T2* Relaxometry](#t2-relaxometry)
+  - [Multi-Echo Gradient Echo (GRE)](#multi-echo-gradient-echo-gre)
+  - [Parametric Mapping](#parametric-mapping)
+  - [Iron Overload Quantification](#iron-overload-quantification)
+  - [Exponential Decay Models](#exponential-decay-models)
+  - [Curve Fitting Theory](#curve-fitting-theory)
+- [Dataset](#dataset)
+- [Implementazione](#implementazione)
+  - [Struttura del Progetto](#struttura-del-progetto)
+  - [Pipeline di Elaborazione](#pipeline-di-elaborazione)
+  - [Utilizzo](#utilizzo)
+- [Risultati Attesi](#risultati-attesi)
+- [Bibliografia](#bibliografia)
+
+---
+
+## Introduzione
+
+Questa esercitazione implementa un sistema completo di **mappatura parametrica T2*** per la quantificazione del sovraccarico di ferro tramite risonanza magnetica cardiaca. Il T2* (T2-star) è un parametro di rilassamento trasversale che riflette sia le inomogeneità di campo magnetico sia la concentrazione di ferro nei tessuti.
+
+**Obiettivi principali**:
+1. Acquisire serie multi-eco Gradient Echo (GRE)
+2. Implementare modelli di decadimento esponenziale (S-EXP e C-EXP)
+3. Generare mappe parametriche pixel-by-pixel tramite curve fitting
+4. Quantificare il sovraccarico di ferro in pazienti con talassemia
+5. Confrontare modelli di fitting e validare risultati
+
+**Contesto clinico**: La talassemia major e altre anemie croniche richiedono trasfusioni ripetute che causano accumulo di ferro (emosiderosi). Il T2* permette una quantificazione non invasiva della concentrazione di ferro nel miocardio e nel fegato, guidando la terapia chelante.
+
+---
+
+## Teoria
+
+### T2* Relaxometry
+
+Il **T2* (T2-star)** è il tempo di rilassamento trasversale effettivo che include sia il T2 intrinseco del tessuto sia gli effetti di disomogeneità del campo magnetico:
+
+```
+1/T2* = 1/T2 + 1/T2'
+```
+
+Dove:
+- **T2**: Rilassamento spin-spin (interazioni molecolari)
+- **T2'**: Dephasing dovuto a disomogeneità di campo (macroscopiche + microscopiche)
+
+**Effetto del ferro sul T2***:
+- Il ferro (ferritina, emosiderina) è paramagnetico e crea gradienti di campo locali
+- Questi gradienti accelerano il dephasing degli spin → T2* diminuisce
+- Relazione inversa: più ferro → T2* più breve
+
+**Range di valori**:
+- Miocardio normale: T2* > 20 ms
+- Sovraccarico moderato: 10-20 ms
+- Sovraccarico severo: T2* < 10 ms (rischio aritmie/scompenso)
+- Fegato normale: T2* ~ 20-30 ms
+- Sovraccarico epatico severo: T2* < 5 ms
+
+### Multi-Echo Gradient Echo (GRE)
+
+La sequenza **multi-echo GRE** acquisisce più echi a tempi diversi (TE) dopo un singolo impulso di eccitazione:
+
+**Parametri tipici**:
+- TR: 15-20 ms
+- TE: 2.0, 4.2, 6.4, 8.6, ... ms (spaziatura ~2ms)
+- Flip angle: 20-35°
+- Numero di echi: 8-12
+- Breath-hold: singolo respiro (~15 secondi)
+
+**Vantaggi**:
+- Acquisizione rapida (singolo breath-hold)
+- Campionamento denso della curva di decadimento
+- Sensibilità elevata a T2* brevi
+
+**Signal decay**: Il segnale GRE decade esponenzialmente con il tempo di eco:
+
+```
+S(TE) = S0 * exp(-TE / T2*)
+```
+
+### Parametric Mapping
+
+La **mappatura parametrica** consiste nella stima pixel-by-pixel di parametri quantitativi (T2*, R2*) tramite fitting matematico.
+
+**Pipeline**:
+1. **Acquisizione multi-echo**: N echi per ogni pixel → vettore segnale S[TE1, TE2, ..., TEn]
+2. **Curve fitting**: Per ogni pixel, fit del modello esponenziale ai dati
+3. **Parametro estimation**: Estrazione di T2* (o R2* = 1/T2*)
+4. **Mappa 2D**: Creazione di immagine parametrica T2*(x,y)
+
+**Vantaggi rispetto a ROI analysis**:
+- Visualizzazione spaziale dell'eterogeneità
+- Quantificazione oggettiva pixel-by-pixel
+- Rilevamento di aree focali di sovraccarico
+- Riduzione bias da selezione ROI
+
+**Challenges**:
+- Elevato SNR richiesto (piccoli errori → grandi variazioni T2*)
+- Tempi di calcolo (fitting per ~65k pixel)
+- Artefatti da movimento respiratorio/cardiaco
+- Scelta del modello di fitting
+
+### Iron Overload Quantification
+
+**Calibrazione T2* - Ferro**:
+
+Wood et al. (2005) hanno stabilito curve di calibrazione tramite biopsia:
+
+**Fegato**:
+```
+LIC (mg Fe/g dry weight) = 0.202 + 27.0 / T2*(liver)
+```
+
+**Cuore**:
+```
+LIC (mg Fe/g dry weight) = 45 / T2*(heart)^1.22
+```
+
+**Categorie cliniche (cuore)**:
+- T2* > 20 ms: Normale (rischio basso)
+- 10-20 ms: Sovraccarico moderato (rischio intermedio)
+- < 10 ms: Sovraccarico severo (rischio alto → terapia intensiva)
+
+**Categorie fegato**:
+- T2* > 15 ms: Normale/lieve
+- 5-15 ms: Moderato
+- < 5 ms: Severo
+
+**Correlazione cuore-fegato**: Il sovraccarico epatico precede quello cardiaco. Monitoraggio combinato è essenziale.
+
+### Exponential Decay Models
+
+Due modelli principali per il fitting del decadimento T2*:
+
+#### 1. S-EXP (Simple Exponential) - 2 parametri
+
+```python
+S(TE) = S0 * exp(-TE * R2*)
+```
+
+Parametri:
+- **S0**: Segnale iniziale (TE=0)
+- **R2***: Tasso di rilassamento (R2* = 1/T2*)
+
+**Vantaggi**:
+- Semplicità (2 soli parametri)
+- Stabilità numerica
+- Interpretazione diretta
+
+**Svantaggi**:
+- Assume segnale → 0 per TE → ∞
+- Non considera rumore/offset del background
+- Bias per T2* molto brevi o lunghi
+
+#### 2. C-EXP (Complex Exponential) - 3 parametri
+
+```python
+S(TE) = S0 * exp(-TE * R2*) + C
+```
+
+Parametri:
+- **S0**: Ampiezza componente esponenziale
+- **R2***: Tasso di rilassamento
+- **C**: Costante offset (rumore background)
+
+**Vantaggi**:
+- Modella meglio il rumore di fondo
+- Riduce bias per T2* corti (<5ms)
+- Migliore goodness-of-fit
+
+**Svantaggi**:
+- Maggiore complessità (3 parametri)
+- Rischio overfitting con SNR basso
+- Richiede più echi (minimo 6-8)
+
+#### Scelta del Modello
+
+**S-EXP**: Preferibile per:
+- T2* > 5 ms
+- SNR elevato
+- Numero di echi limitato (6-8)
+- Semplicità e velocità
+
+**C-EXP**: Preferibile per:
+- T2* molto brevi (<5ms, sovraccarico severo)
+- Presenza di offset/rumore significativo
+- Numero di echi alto (>8)
+- Analisi dettagliata
+
+**Best practice**: Eseguire entrambi i modelli e confrontare goodness-of-fit (RMSE, R²).
+
+### Curve Fitting Theory
+
+Il fitting viene eseguito tramite **minimizzazione least-squares non lineare**:
+
+```
+min Σ [S_measured(TEi) - S_model(TEi; params)]²
+```
+
+#### Algoritmo: Levenberg-Marquardt
+
+Implementato in `scipy.optimize.curve_fit`:
+- Combina Gauss-Newton (vicino al minimo) e gradient descent (lontano)
+- Robusto e veloce per problemi non lineari
+- Richiede initial guess ragionevole
+
+#### Initial Parameter Estimation
+
+Per evitare minimi locali, si stima inizialmente R2* tramite **log-linear regression**:
+
+```python
+log(S) ≈ log(S0) - R2* * TE
+```
+
+Regressione lineare su `log(S) vs TE` → pendenza = -R2*
+
+**Bounds sui parametri**:
+- S0: [0, 2*max(signal)]
+- R2*: [0.01, 2.0] s⁻¹ → T2* ∈ [0.5, 100] ms
+- C: [0, max(signal)]
+
+#### Goodness of Fit
+
+**RMSE (Root Mean Square Error)**:
+```
+RMSE = sqrt(Σ[S_measured - S_fitted]² / N)
+```
+
+- Quantifica l'errore di fitting
+- Unità: intensità segnale
+- RMSE elevato → scarso fit (movimento, artefatti, SNR basso)
+
+**Mappe RMSE**: Visualizzano spazialmente la qualità del fitting, identificando regioni problematiche.
+
+---
+
+## Dataset
+
+### Struttura
+
+```
+data/DICOM/
+├── PAZIENTE1/           # Paziente con sovraccarico di ferro (talassemia)
+│   ├── IM_0001         # Echo 1 (TE = 2.0 ms)
+│   ├── IM_0002         # Echo 2 (TE = 4.2 ms)
+│   ├── ...
+│   └── IM_0010         # Echo 10 (TE = 20.2 ms)
+└── PAZIENTE2/           # Paziente normale (controllo)
+    ├── IM_0001
+    ├── ...
+    └── IM_0010
+```
+
+### Parametri di Acquisizione
+
+**Sequenza**: Multi-echo Gradient Echo (GRE)
+- Campo magnetico: 1.5T
+- Matrice: 256×256
+- FOV: ~360 mm
+- Slice thickness: 8 mm
+- TR: ~15 ms
+- Flip angle: 20-35°
+
+**Echo times** (ms):
+```
+TE1:  2.0
+TE2:  4.2
+TE3:  6.4
+TE4:  8.6
+TE5: 10.8
+TE6: 13.0
+TE7: 15.2
+TE8: 17.4
+TE9: 19.6
+TE10: 21.8
+```
+
+Spacing: ~2.2 ms
+
+### Caratteristiche Cliniche
+
+**PAZIENTE1** (Sovraccarico di ferro):
+- Diagnosi: Talassemia major
+- Storia: Trasfusioni ripetute, terapia chelante subottimale
+- T2* atteso:
+  - Cuore: ~2 ms (severo)
+  - Fegato: <1 ms (severo)
+  - Muscolo scheletrico: ~25 ms (normale)
+
+**PAZIENTE2** (Controllo normale):
+- Nessun sovraccarico di ferro
+- T2* atteso:
+  - Cuore: ~22 ms (normale)
+  - Fegato: ~26 ms (normale)
+  - Muscolo scheletrico: ~30 ms (normale)
+
+---
+
+## Implementazione
+
+### Struttura del Progetto
+
+```
+es_9__11_05_2022_mappe_parametriche/
+├── README.md                      # Questo file
+├── data/
+│   └── DICOM/
+│       ├── PAZIENTE1/            # Multi-echo DICOM (10 echi)
+│       └── PAZIENTE2/
+├── results/                       # Output generati
+│   ├── multiecho_images.png      # Visualizzazione 10 echi
+│   ├── t2star_map_s_exp.png      # Mappa T2* (S-EXP)
+│   ├── t2star_map_c_exp.png      # Mappa T2* (C-EXP)
+│   ├── t2star_difference.png     # Differenza C-EXP - S-EXP
+│   ├── example_decay_curve.png   # Curve di decadimento esempio
+│   ├── t2star_map_*.npy          # Mappe salvate (numpy)
+│   └── rmse_map_*.npy
+├── docs/
+│   └── ESERCITAZIONE_11_05_2022.pdf  # Testo originale
+└── src/
+    ├── utils.py                  # Funzioni core (~500 linee)
+    └── t2star_mapping.py         # Pipeline principale (~220 linee)
+```
+
+### Pipeline di Elaborazione
+
+#### 1. Caricamento Serie Multi-Echo
+
+```python
+from utils import load_multiecho_series
+
+volume, echo_times, datasets = load_multiecho_series('data/DICOM/PAZIENTE1')
+# volume: (10, 256, 256) - 10 echi
+# echo_times: [2.0, 4.2, ..., 21.8] ms
+```
+
+**Processo**:
+- Lettura DICOM con `pydicom`
+- Ordinamento per `EchoTime` tag (0018,0081)
+- Estrazione matrice 3D (n_echoes, height, width)
+
+#### 2. Generazione Mappe T2*
+
+```python
+from utils import create_t2star_map
+
+t2star_map, rmse_map, r2star_map = create_t2star_map(
+    volume, echo_times,
+    model='c-exp',           # 's-exp' o 'c-exp'
+    threshold=10.0,          # Soglia intensità per masking
+    verbose=True
+)
+```
+
+**Algoritmo**:
+1. Crea maschera binaria: `signal[0] > threshold`
+2. Per ogni pixel nella maschera:
+   - Estrae curva di decadimento `S(TE)`
+   - Stima parametri iniziali (log-linear regression)
+   - Esegue curve fitting (Levenberg-Marquardt)
+   - Calcola T2* = 1/R2* e RMSE
+3. Costruisce mappe 2D parametriche
+
+**Ottimizzazioni**:
+- Parallel processing potenziale (non implementato per semplicità)
+- Progress bar per monitoraggio
+- Gestione errori di fitting (valori outlier)
+
+#### 3. Analisi ROI e Statistiche
+
+```python
+from utils import compute_roi_statistics
+
+# Segmentazione manuale ROI (miocardio, fegato, muscolo)
+roi_masks = {
+    'myocardium': create_myocardial_roi(volume[0]),
+    'liver': create_liver_roi(volume[0]),
+    'muscle': create_muscle_roi(volume[0])
+}
+
+stats = {}
+for roi_name, mask in roi_masks.items():
+    stats[roi_name] = compute_roi_statistics(t2star_map, mask)
+    # stats: {'mean_t2star', 'std_t2star', 'median_t2star', 'n_pixels'}
+```
+
+#### 4. Quantificazione Ferro
+
+```python
+from utils import estimate_iron_concentration
+
+# Calibrazione Wood et al. 2005
+lic_liver = estimate_iron_concentration(t2star_liver, tissue='liver')
+lic_heart = estimate_iron_concentration(t2star_heart, tissue='heart')
+
+print(f"Liver Iron Concentration: {lic_liver:.1f} mg Fe/g dry weight")
+print(f"Cardiac Iron Concentration: {lic_heart:.1f} mg Fe/g dry weight")
+```
+
+#### 5. Visualizzazione
+
+```python
+# Mappa T2* con colormap jet
+plt.imshow(t2star_map, cmap='jet', vmin=0, vmax=50)
+plt.colorbar(label='T2* (ms)')
+
+# Mappa RMSE (errore di fitting)
+plt.imshow(rmse_map, cmap='hot', vmin=0)
+plt.colorbar(label='RMSE')
+
+# Curve di decadimento esempio
+plt.plot(echo_times, signal, 'ko', label='Measured')
+plt.plot(te_fine, fitted_signal, 'r-', label='Fitted')
+```
+
+### Utilizzo
+
+#### Script Principale
+
+```bash
+cd es_9__11_05_2022_mappe_parametriche/src
+
+# Analisi completa con entrambi i modelli
+python t2star_mapping.py \
+    --data_dir ../data/DICOM/PAZIENTE1 \
+    --model both \
+    --threshold 10.0 \
+    --vmax 50.0 \
+    --output_dir ../results/paziente1
+
+# Solo S-EXP
+python t2star_mapping.py \
+    --data_dir ../data/DICOM/PAZIENTE2 \
+    --model s-exp \
+    --threshold 10.0
+```
+
+#### Parametri CLI
+
+```
+--data_dir      Directory contenente DICOM multi-echo (REQUIRED)
+--output_dir    Directory output (default: ../results)
+--model         Modello fitting: 's-exp', 'c-exp', 'both' (default: both)
+--threshold     Soglia intensità per masking (default: 10.0)
+--vmax          Max T2* per colormap (ms) (default: 50.0)
+```
+
+#### Script Python Personalizzato
+
+```python
+#!/usr/bin/env python3
+import numpy as np
+import matplotlib.pyplot as plt
+from utils import (
+    load_multiecho_series,
+    create_t2star_map,
+    compute_roi_statistics,
+    estimate_iron_concentration
+)
+
+# 1. Carica dati
+volume, echo_times, datasets = load_multiecho_series('data/DICOM/PAZIENTE1')
+
+# 2. Genera mappe T2* (S-EXP e C-EXP)
+t2star_s, rmse_s, _ = create_t2star_map(volume, echo_times, model='s-exp')
+t2star_c, rmse_c, _ = create_t2star_map(volume, echo_times, model='c-exp')
+
+# 3. Confronta modelli
+difference = t2star_c - t2star_s
+print(f"Mean difference (C-EXP - S-EXP): {np.nanmean(difference):.2f} ms")
+
+# 4. Segmentazione manuale ROI miocardio (esempio)
+from skimage.draw import polygon
+y_coords = [120, 140, 160, 140]
+x_coords = [120, 140, 120, 100]
+rr, cc = polygon(y_coords, x_coords, shape=volume.shape[1:])
+myocardium_mask = np.zeros(volume.shape[1:], dtype=bool)
+myocardium_mask[rr, cc] = True
+
+# 5. Statistiche ROI
+stats_myo = compute_roi_statistics(t2star_c, myocardium_mask)
+print(f"Myocardium T2*: {stats_myo['mean_t2star']:.1f} ± {stats_myo['std_t2star']:.1f} ms")
+
+# 6. Stima ferro
+lic_heart = estimate_iron_concentration(stats_myo['mean_t2star'], tissue='heart')
+print(f"Cardiac Iron: {lic_heart:.1f} mg Fe/g dry weight")
+
+# 7. Visualizzazione
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+axes[0].imshow(t2star_s, cmap='jet', vmin=0, vmax=50)
+axes[0].set_title('T2* S-EXP')
+axes[1].imshow(t2star_c, cmap='jet', vmin=0, vmax=50)
+axes[1].set_title('T2* C-EXP')
+axes[2].imshow(difference, cmap='RdBu_r', vmin=-5, vmax=5)
+axes[2].set_title('Difference')
+plt.show()
+```
+
+---
+
+## Risultati Attesi
+
+### PAZIENTE1 (Sovraccarico di Ferro)
+
+**Mappe T2***:
+- Miocardio: T2* ~2 ms (molto scuro su mappa jet)
+- Fegato: T2* <1 ms (quasi nero)
+- Muscolo scheletrico: T2* ~25 ms (normale)
+
+**Quantificazione ferro**:
+- Cardiac LIC: ~15-20 mg Fe/g dry weight (severo)
+- Hepatic LIC: >30 mg Fe/g dry weight (severo)
+
+**Curve di decadimento**:
+- Rapido decadimento esponenziale
+- Segnale → 0 già a TE ~10ms
+- C-EXP fit migliore di S-EXP (offset significativo)
+
+**Interpretazione clinica**:
+- Sovraccarico severo sia cardiaco che epatico
+- Alto rischio aritmie e scompenso cardiaco
+- Indicazione: terapia chelante intensiva
+
+### PAZIENTE2 (Controllo Normale)
+
+**Mappe T2***:
+- Miocardio: T2* ~22 ms (colori caldi su mappa jet)
+- Fegato: T2* ~26 ms (normale)
+- Muscolo scheletrico: T2* ~30 ms (normale)
+
+**Quantificazione ferro**:
+- Cardiac LIC: ~2 mg Fe/g dry weight (normale)
+- Hepatic LIC: ~1 mg Fe/g dry weight (normale)
+
+**Curve di decadimento**:
+- Decadimento graduale
+- Segnale significativo anche a TE = 21.8 ms
+- S-EXP e C-EXP producono risultati simili
+
+**Interpretazione clinica**:
+- Assenza di sovraccarico di ferro
+- Nessuna indicazione per terapia chelante
+
+### Confronto S-EXP vs C-EXP
+
+**Differenze attese**:
+- PAZIENTE1: C-EXP produce T2* leggermente più alti (~0.5-1 ms)
+- PAZIENTE2: Differenza minima (<1 ms)
+- RMSE: C-EXP generalmente inferiore (migliore fit)
+
+**Regioni di discrepanza**:
+- Bordi del miocardio (partial volume)
+- Aree con SNR basso
+- Artefatti da movimento
+
+### Mappe RMSE
+
+**Pattern attesi**:
+- RMSE basso (<5) in regioni omogenee
+- RMSE alto (>10) in bordi, vasi, artefatti
+- PAZIENTE1: RMSE più alto (decadimento rapido + rumore)
+
+### File di Output
+
+```
+results/
+├── multiecho_images.png          # Griglia 10 echi
+├── t2star_map_s_exp.png          # Mappa T2* S-EXP + RMSE
+├── t2star_map_c_exp.png          # Mappa T2* C-EXP + RMSE
+├── t2star_difference.png         # C-EXP - S-EXP
+├── example_decay_curve.png       # Curve fitting al centro immagine
+├── t2star_map_s_exp.npy          # Array numpy T2* (S-EXP)
+├── t2star_map_c_exp.npy          # Array numpy T2* (C-EXP)
+├── rmse_map_s_exp.npy            # Array numpy RMSE (S-EXP)
+└── rmse_map_c_exp.npy            # Array numpy RMSE (C-EXP)
+```
+
+---
+
+## Bibliografia
+
+### Articoli Fondamentali
+
+1. **Anderson LJ, Holden S, Davis B, et al.**
+   *Cardiovascular T2-star (T2*) magnetic resonance for the early diagnosis of myocardial iron overload.*
+   **European Heart Journal** 2001; 22(23):2171-2179.
+   DOI: 10.1053/euhj.2001.2822
+
+2. **Wood JC, Enriquez C, Ghugre N, et al.**
+   *MRI R2 and R2* mapping accurately estimates hepatic iron concentration in transfusion-dependent thalassemia and sickle cell disease patients.*
+   **Blood** 2005; 106(4):1460-1465.
+   DOI: 10.1182/blood-2004-10-3982
+
+3. **Carpenter JP, He T, Kirk P, et al.**
+   *On T2* magnetic resonance and cardiac iron.*
+   **Circulation** 2011; 123(14):1519-1528.
+   DOI: 10.1161/CIRCULATIONAHA.110.007641
+
+4. **Westwood MA, Anderson LJ, Firmin DN, et al.**
+   *A single breath-hold multiecho T2* cardiovascular magnetic resonance technique for diagnosis of myocardial iron overload.*
+   **Journal of Magnetic Resonance Imaging** 2003; 18(1):33-39.
+   DOI: 10.1002/jmri.10332
+
+### Review e Linee Guida
+
+5. **Kirk P, Roughton M, Porter JB, et al.**
+   *Cardiac T2* magnetic resonance for prediction of cardiac complications in thalassemia major.*
+   **Circulation** 2009; 120(20):1961-1968.
+   DOI: 10.1161/CIRCULATIONAHA.109.874487
+
+6. **Pennell DJ, Udelson JE, Arai AE, et al.**
+   *Cardiovascular function and treatment in β-thalassemia major: a consensus statement from the American Heart Association.*
+   **Circulation** 2013; 128(3):281-308.
+   DOI: 10.1161/CIR.0b013e31829b2be6
+
+7. **Modell B, Khan M, Darlison M, et al.**
+   *Improved survival of thalassaemia major in the UK and relation to T2* cardiovascular magnetic resonance.*
+   **Journal of Cardiovascular Magnetic Resonance** 2008; 10(1):42.
+   DOI: 10.1186/1532-429X-10-42
+
+### Aspetti Tecnici
+
+8. **He T, Gatehouse PD, Kirk P, et al.**
+   *Black-blood T2* technique for myocardial iron measurement in thalassemia.*
+   **Journal of Magnetic Resonance Imaging** 2007; 25(6):1205-1209.
+   DOI: 10.1002/jmri.20929
+
+9. **Ghugre NR, Enriquez CM, Coates TD, et al.**
+   *Improved R2* measurements in myocardial iron overload.*
+   **Journal of Magnetic Resonance Imaging** 2006; 23(1):9-16.
+   DOI: 10.1002/jmri.20467
+
+10. **Positano V, Salani B, Pepe A, et al.**
+    *Improved T2* assessment in liver iron overload by magnetic resonance imaging.*
+    **Magnetic Resonance Imaging** 2009; 27(2):188-197.
+    DOI: 10.1016/j.mri.2008.06.004
+
+### Curve Fitting e Analisi Dati
+
+11. **Feng Y, He T, Gatehouse PD, et al.**
+    *Improved MRI R2* relaxometry of iron-loaded liver with noise correction.*
+    **Magnetic Resonance in Medicine** 2013; 70(6):1765-1774.
+    DOI: 10.1002/mrm.24607
+
+12. **More JJ.**
+    *The Levenberg-Marquardt algorithm: implementation and theory.*
+    **Numerical Analysis** (Springer Lecture Notes in Mathematics 630), 1978; pp. 105-116.
+
+### Applicazioni Cliniche
+
+13. **Taher AT, Musallam KM, Wood JC, Cappellini MD.**
+    *Magnetic resonance evaluation of hepatic and myocardial iron deposition in transfusion-independent thalassemia intermedia compared to regularly transfused thalassemia major patients.*
+    **American Journal of Hematology** 2010; 85(4):288-290.
+    DOI: 10.1002/ajh.21626
+
+14. **Porter JB, Wood J, Olivieri N, et al.**
+    *Treatment of heart failure in adults with thalassemia major: response in patients randomised to deferoxamine with or without deferiprone.*
+    **Journal of Cardiovascular Magnetic Resonance** 2013; 15:38.
+    DOI: 10.1186/1532-429X-15-38
+
+15. **Ramazzotti A, Pepe A, Positano V, et al.**
+    *Multicenter validation of the magnetic resonance T2* technique for segmental and global quantification of myocardial iron.*
+    **Journal of Magnetic Resonance Imaging** 2009; 30(1):62-68.
+    DOI: 10.1002/jmri.21781
+
+---
+
+## Note di Implementazione
+
+### Differenze rispetto a MATLAB
+
+1. **Curve Fitting**:
+   - MATLAB: `fit()` con `NonlinearLeastSquares`
+   - Python: `scipy.optimize.curve_fit()` (Levenberg-Marquardt)
+   - Risultati equivalenti con parametri opportuni
+
+2. **Gestione DICOM**:
+   - MATLAB: `dicomread()` + ordinamento manuale
+   - Python: `pydicom` + sorting per `EchoTime` tag
+
+3. **Visualizzazione**:
+   - MATLAB: Colormap 'jet' (built-in)
+   - Python: `matplotlib` colormap 'jet' (identico)
+
+4. **Performance**:
+   - Python più lento per fitting pixel-by-pixel (~30-60s vs ~10s MATLAB)
+   - Possibile parallelizzazione con `multiprocessing` o `joblib`
+
+### Limitazioni
+
+1. **Parallelizzazione**: Non implementata (per semplicità didattica)
+2. **Segmentazione automatica**: ROI manualmente disegnate
+3. **Motion correction**: Non implementata (assume breath-hold perfetto)
+4. **Noise correction**: Modello C-EXP parziale (Feng et al. più complesso)
+
+### Estensioni Possibili
+
+1. **Segmentazione automatica LV**: U-Net o threshold-based
+2. **Parallel processing**: `joblib.Parallel` per speed-up 10-20x
+3. **Motion correction**: Registrazione inter-echo
+4. **Advanced models**: Feng noise-corrected, truncation models
+5. **GUI interattiva**: Per selezione ROI e analisi real-time
+
+---
+
+**Autore**: Corso di Imaging Biomedico
+**Data**: Maggio 2022 (Conversione Python: 2025)
+**Versione**: 1.0

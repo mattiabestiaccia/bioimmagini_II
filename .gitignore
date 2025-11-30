@@ -1,3 +1,7 @@
+# ===================================
+# OBSIDIAN VAULT
+# ===================================
+
 # Obsidian workspace files (contengono layout personale dell'editor)
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
@@ -9,22 +13,112 @@
 .obsidian/sync-config.json
 .obsidian/publish.json
 
-# Plugin workspace data (se non vuoi condividere impostazioni personali)
+# Plugin workspace data
 .obsidian/workspace
 
 # Trash folder
 .trash/
 
-# OS files
+# ===================================
+# PYTHON & DATA SCIENCE
+# ===================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Data files biomedici (opzionale - considera se committare)
+*.dcm
+*.nii
+*.nii.gz
+data/raw/
+data/processed/
+
+# ===================================
+# LARGE FILES & CORSO MATERIAL
+# ===================================
+
+# Large files (>100MB - GitHub limit)
+*.zip
+DATA.zip
+esercitazioni/esercitazioni_matlab/ESERCITAZIONE_23_25_05_2022*/DATA.zip
+
+# Dispense e materiale didattico
+dispense/
+*.ppt
+*.pptx
+*.doc
+*.docx
+
+# Results
+results/
+output/
+
+# ===================================
+# IDE & EDITORS
+# ===================================
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===================================
+# OS FILES
+# ===================================
+
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Temporary files
-*.tmp
-~*
-*.swp
-*.swo
+# ===================================
+# TEMPORARY & MISC
+# ===================================
 
-# Node modules (se usi plugin con dipendenze)
+*.tmp
+*.log
+.cache/
 node_modules/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.hypothesis/
+
+# Backup
+*_BACKUP_*/
+*.backup
+
+# Documentation builds
+docs/build/
+docs/_build/
