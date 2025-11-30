@@ -1,0 +1,30 @@
+# Obsidian workspace files (contengono layout personale dell'editor)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+
+# Obsidian cache
+.obsidian/cache/
+
+# Obsidian sync/publish settings
+.obsidian/sync-config.json
+.obsidian/publish.json
+
+# Plugin workspace data (se non vuoi condividere impostazioni personali)
+.obsidian/workspace
+
+# Trash folder
+.trash/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+~*
+*.swp
+*.swo
+
+# Node modules (se usi plugin con dipendenze)
+node_modules/
