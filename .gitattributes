@@ -1,0 +1,36 @@
+# Gestione line endings per cross-platform (WSL + Windows)
+# Forza LF per tutti i file di testo
+
+# Markdown e documentazione
+*.md text eol=lf
+*.txt text eol=lf
+
+# JSON e configurazione
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+
+# Python
+*.py text eol=lf
+*.ipynb text eol=lf
+
+# MATLAB
+*.m text eol=lf
+
+# Git
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Immagini (binary)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+
+# Archive
+*.zip binary
+*.tar binary
+*.gz binary

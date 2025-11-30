@@ -27,6 +27,25 @@ bioimmagini_positano/
 
 ## 🚀 Quick Start
 
+### Setup Cross-Platform (WSL + Windows)
+
+Questo repository è configurato per essere utilizzato sia da **WSL** (per sviluppo con Cursor/VS Code) che da **Windows** (per Obsidian vault):
+
+**Percorso WSL**:
+```bash
+/home/brusc/Projects/bioimmagini_positano
+```
+
+**Percorso Windows** (per aprire in Obsidian):
+```
+\\wsl.localhost\Ubuntu\home\brusc\Projects\bioimmagini_positano
+```
+
+**Configurazione Git**:
+- `.gitattributes` gestisce automaticamente i line endings (LF)
+- `.gitignore` esclude file temporanei di Obsidian
+- Puoi editare documenti da entrambi gli ambienti senza conflitti
+
 ### Setup Ambiente
 
 ```bash
