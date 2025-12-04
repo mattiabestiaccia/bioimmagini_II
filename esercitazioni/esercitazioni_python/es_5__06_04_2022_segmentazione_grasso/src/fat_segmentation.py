@@ -227,7 +227,7 @@ def main():
     print(f"  Figure salvata in: {fig_path}")
 
     # Mostra figura
-    plt.show()
+    # plt.show()
 
     print("\n" + "="*60)
     print("COMPLETATO!")

@@ -43,22 +43,44 @@ from sklearn.cluster import KMeans
 # Aggiungi src al path per import
 sys.path.insert(0, str(Path(__file__).parent))
 
-from .exceptions import (
-    ClusteringError,
-    DataLoadError,
-    ValidationError,
-)
-from .types import BinaryMask, Centroids, ClusterLabels, ImageStack
-from .utils import (
-    crop_to_roi,
-    dice_coefficient,
-    identify_tissue_clusters,
-    keep_largest_component,
-    load_gold_standard,
-    load_perfusion_series,
-    remove_small_regions,
-    visualize_segmentation,
-)
+try:
+    from .exceptions import (
+        ClusteringError,
+        DataLoadError,
+        ValidationError,
+    )
+except ImportError:
+    from exceptions import (
+        ClusteringError,
+        DataLoadError,
+        ValidationError,
+    )
+try:
+    from .custom_types import BinaryMask, Centroids, ClusterLabels, ImageStack
+except ImportError:
+    from custom_types import BinaryMask, Centroids, ClusterLabels, ImageStack
+try:
+    from .utils import (
+        crop_to_roi,
+        dice_coefficient,
+        identify_tissue_clusters,
+        keep_largest_component,
+        load_gold_standard,
+        load_perfusion_series,
+        remove_small_regions,
+        visualize_segmentation,
+    )
+except ImportError:
+    from utils import (
+        crop_to_roi,
+        dice_coefficient,
+        identify_tissue_clusters,
+        keep_largest_component,
+        load_gold_standard,
+        load_perfusion_series,
+        remove_small_regions,
+        visualize_segmentation,
+    )
 
 
 logger = logging.getLogger(__name__)

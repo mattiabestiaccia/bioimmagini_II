@@ -1,0 +1,91 @@
+---
+title: "Guida alla Dimostrazione: Esercitazione 3 (Clustering Cardiaco)"
+author: "Bioimmagini Positano"
+date: "2025-12-04"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+lang: it
+---
+
+
+Questa guida spiega passo dopo passo come presentare e illustrare lo svolgimento dell'Esercitazione 3. Segui questo flusso per una dimostrazione logica e completa.
+
+## Preparazione
+
+Assicurati di essere nella directory corretta e di avere l'ambiente virtuale attivo.
+
+```bash
+cd /home/brusc/Projects/bioimmagini_positano/esercitazioni/esercitazioni_python/es_3__23_03_2022_clustering
+source ../venv/bin/activate  # O il venv specifico se diverso
+```
+
+## Flusso della Dimostrazione
+
+### Step 1: Il Problema (Curve Intensità/Tempo)
+
+**Obiettivo:** Mostrare che tessuti diversi hanno dinamiche di perfusione diverse.
+
+1.  **Esegui il comando:**
+    ```bash
+    cd src
+    python plot_time_curves.py
+    ```
+2.  **Cosa mostrare:**
+    -   Verrà generato e aperto il grafico `results/time_curves.png`.
+    -   **Indica le curve:**
+        -   **Ventricolo Destro (RV - Blu):** Picco molto alto e precoce (il contrasto arriva qui per primo).
+        -   **Ventricolo Sinistro (LV - Arancione):** Picco alto ma successivo al RV.
+        -   **Miocardio (Verde):** Picco più basso e ritardato (il tessuto assorbe il contrasto dai capillari).
+    -   **Concetto chiave:** "Usiamo queste differenze temporali per distinguere i tessuti automaticamente."
+
+### Step 2: La Soluzione (Segmentazione K-means)
+
+**Obiettivo:** Mostrare come l'algoritmo raggruppa i pixel in base alle curve.
+
+1.  **Esegui il comando:**
+    ```bash
+    python kmeans_segmentation.py
+    ```
+2.  **Cosa mostrare:**
+    -   Osserva l'output nel terminale:
+        -   Nota i **DICE Scores**. Discuti i valori ottenuti (es. RV, LV, MYO).
+        -   Nota la mappatura automatica (es. "Cluster 0 -> RV").
+    -   Apri l'immagine risultante `results/kmeans_segmentation.png`.
+    -   **Confronto visivo:** Mostra come la segmentazione (a destra) cerca di identificare le strutture cardiache.
+    -   **Nota:** Se i risultati non sono perfetti (DICE bassi), spiega che il clustering non supervisionato può essere sensibile al rumore o alla variabilità del segnale.
+
+### Step 3: Validazione (Confronto con Gold Standard)
+
+**Obiettivo:** Provare la correttezza quantitativa.
+
+1.  **Mostra il Gold Standard:**
+    -   Apri `results/gold_standard.png`.
+    -   Spiega che queste sono le maschere disegnate manualmente da un esperto.
+2.  **Confronto:**
+    -   Metti a fianco `kmeans_segmentation.png` e `gold_standard.png`.
+    -   Evidenzia le similarità e le differenze.
+    -   Discuti le sfide: bordi sfumati, movimento, o basso contrasto possono influenzare il risultato.
+
+### Step 4: Ottimizzazione (Opzionale/Avanzato)
+
+**Obiettivo:** Mostrare che abbiamo cercato la configurazione migliore.
+
+1.  **Esegui il comando (modalità veloce):**
+    ```bash
+    python optimize_kmeans.py --quick
+    ```
+2.  **Cosa mostrare:**
+    -   Il terminale mostrerà una tabella comparativa.
+    -   **Punto chiave:** "L'ottimizzazione ci aiuta a trovare i parametri migliori."
+    -   Nel nostro caso, potremmo trovare che usare **60 frames** e la distanza **'euclidean'** migliora i risultati rispetto ai parametri di default.
+    -   Mostra come i punteggi DICE cambiano con diverse configurazioni.
+
+## Riassunto Finale
+
+Concludi la dimostrazione riassumendo i risultati:
+1.  Abbiamo analizzato le **dinamiche temporali** del cuore.
+2.  Abbiamo applicato il **K-means clustering** per separare i tessuti.
+3.  Abbiamo valutato quantitativamente i risultati e esplorato l'ottimizzazione dei parametri per migliorare la segmentazione.

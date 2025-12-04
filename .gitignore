@@ -61,6 +61,12 @@ ENV/
 *.nii.gz
 data/raw/
 data/processed/
+**/data/*.png
+**/data/*.jpg
+**/data/*.jpeg
+**/data/*.tif
+**/data/*.tiff
+esercitazioni/esercitazioni_python/es_11__25_05_2022_unet_segmentazione/data/
 
 # ===================================
 # LARGE FILES & CORSO MATERIAL
@@ -80,6 +86,7 @@ dispense/
 
 # Results
 results/
+results_aug/
 output/
 
 # ===================================
@@ -99,6 +106,7 @@ output/
 .DS_Store
 Thumbs.db
 desktop.ini
+__MACOSX/
 
 # WSL metadata
 .wslconfig
@@ -113,6 +121,10 @@ wsl.conf
 .cache/
 node_modules/
 
+# Generated Markdown (from Quarto)
+GUIDA_DIMOSTRAZIONE.md
+README_DEMO.md
+
 # Testing
 .coverage
 htmlcov/
@@ -126,3 +138,25 @@ htmlcov/
 # Documentation builds
 docs/build/
 docs/_build/
+
+# ===================================
+# GENERATED & CACHE
+# ===================================
+
+# Quarto
+*_files/
+site_libs/
+.quarto/
+
+# Generated HTML
+*.html
+
+# Coverage
+.coverage
+coverage.xml
+
+# Tool Caches
+.benchmarks/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

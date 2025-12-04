@@ -28,7 +28,7 @@ from src.exceptions import (
     ShapeMismatchError,
     ValidationError,
 )
-from src.types import BinaryMask, ImageStack, TimeCurves, TriggerTimes
+from src.custom_types import BinaryMask, ImageStack, TimeCurves, TriggerTimes
 
 
 # ============================================================================

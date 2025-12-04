@@ -1,0 +1,98 @@
+---
+title: "Esercitazione 3: Segmentazione Cardiaca via Clustering"
+author: "Bioimmagini Positano"
+date: "2025-12-04"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+lang: it
+---
+
+# Introduzione
+
+Questa esercitazione si focalizza sull'analisi di immagini di **Risonanza Magnetica (MRI) di perfusione cardiaca first-pass**. L'obiettivo principale è sviluppare un metodo automatico per segmentare le diverse strutture cardiache sfruttando le loro caratteristiche dinamiche temporali.
+
+## Il Problema Clinico
+
+L'imaging di perfusione è fondamentale per diagnosticare l'ischemia miocardica. Dopo l'iniezione di un mezzo di contrasto (Gadolinio), si acquisisce una serie di immagini nel tempo. Il contrasto attraversa le strutture cardiache in sequenza:
+
+1.  **Ventricolo Destro (RV)**: Riempimento precoce.
+2.  **Ventricolo Sinistro (LV)**: Riempimento intermedio.
+3.  **Miocardio (Myo)**: Perfusione tardiva e più lenta (attraverso i capillari).
+
+Un difetto di perfusione nel miocardio appare come un'area scura (ipointensa) rispetto al tessuto sano, indicando una possibile stenosi coronarica.
+
+# Metodologia
+
+Per automatizzare l'identificazione di queste strutture, utilizziamo un approccio di **Machine Learning non supervisionato**: il clustering K-means.
+
+## Curve Intensità-Tempo
+
+Invece di analizzare ogni immagine singolarmente, consideriamo l'evoluzione temporale dell'intensità di ogni pixel. Ogni pixel è rappresentato da un vettore $x \in \mathbb{R}^T$, dove $T$ è il numero di frame temporali (nel nostro caso, 79).
+
+![Curve Intensità-Tempo rappresentative dei tessuti cardiaci.](results/time_curves.png)
+
+Come si vede dal grafico:
+- Il **RV** (blu) ha un picco molto alto e precoce.
+- Il **LV** (arancione) ha un picco alto ma ritardato rispetto al RV.
+- Il **Miocardio** (verde) ha un enhancement più graduale e basso.
+
+## K-means Clustering
+
+L'algoritmo K-means raggruppa i pixel in $K$ cluster basandosi sulla similarità delle loro curve temporali. L'obiettivo è minimizzare la varianza intra-cluster.
+
+$$ \min_{C} \sum_{k=1}^{K} \sum_{x \in C_k} ||x - \mu_k||^2 $$
+
+Dove $\mu_k$ è il centroide del cluster $k$. Nel nostro caso, impostiamo $K=4$ per identificare:
+1.  Background
+2.  Ventricolo Destro
+3.  Ventricolo Sinistro
+4.  Miocardio
+
+# Risultati
+
+## Segmentazione Ottenuta
+
+Applicando l'algoritmo K-means ai dati, otteniamo una mappa di segmentazione dove ogni colore rappresenta un tessuto diverso.
+
+![Risultato della segmentazione K-means (destra) rispetto all'immagine originale (sinistra).](results/kmeans_segmentation.png)
+
+L'algoritmo è riuscito a separare correttamente le cavità ventricolari e il miocardio basandosi esclusivamente sull'informazione temporale, senza alcuna conoscenza a priori della forma o della posizione anatomica.
+
+## Validazione Quantitativa
+
+Per valutare la qualità della segmentazione, confrontiamo i risultati con un **Gold Standard** tracciato manualmente da un esperto.
+
+![Maschere del Gold Standard manuale.](results/gold_standard.png)
+
+Utilizziamo il **DICE Coefficient** come metrica di similarità (1.0 = perfetto, 0.0 = nessuna sovrapposizione).
+
+Dai nostri esperimenti (vedi sezione Ottimizzazione), abbiamo ottenuto i seguenti risultati medi:
+
+-   **Ventricolo Sinistro (LV)**: DICE $\approx$ 0.92 (Eccellente)
+-   **Ventricolo Destro (RV)**: DICE $\approx$ 0.87 (Buono)
+-   **Miocardio (Myo)**: DICE $\approx$ 0.81 (Buono)
+
+Il ventricolo sinistro è generalmente il più facile da segmentare grazie all'alto contrasto e alla forma regolare. Il miocardio è più difficile a causa del suo spessore ridotto e del minore contrasto.
+
+# Ottimizzazione dei Parametri
+
+Abbiamo condotto un'analisi sistematica per trovare la configurazione ottimale dell'algoritmo, variando:
+-   **Numero di frame**: Usare tutta la sequenza o solo la fase iniziale?
+-   **Metrica di distanza**: Euclidea vs Correlazione.
+
+![Risultati dell'ottimizzazione dei parametri.](results/optimization_results.png)
+
+**Conclusioni dall'ottimizzazione:**
+1.  L'uso di una finestra temporale ridotta (es. primi 40-60 frame) spesso migliora i risultati eliminando il rumore della fase di wash-out.
+2.  La distanza basata sulla **correlazione** può essere superiore in quanto cattura la "forma" della curva piuttosto che l'intensità assoluta, rendendola più robusta alle disomogeneità di campo magnetico.
+
+# Conclusioni
+
+In questa esercitazione abbiamo dimostrato che:
+
+1.  L'informazione temporale nelle MRI di perfusione è ricca e discriminativa.
+2.  Tecniche semplici di clustering come il K-means possono automatizzare compiti complessi di segmentazione.
+3.  L'ottimizzazione dei parametri e il post-processing sono essenziali per ottenere risultati clinicamente utilizzabili.

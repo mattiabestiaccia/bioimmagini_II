@@ -34,21 +34,40 @@ except ImportError:
         read_dicom_series = None
         extract_metadata = None
 
-from .exceptions import (
-    DataLoadError,
-    DicomReadError,
-    InvalidClusterCountError,
-    ShapeMismatchError,
-    ValidationError,
-)
-from .types import (
-    BinaryMask,
-    Centroids,
-    ClusterLabels,
-    ImageStack,
-    TimeCurves,
-    TriggerTimes,
-)
+try:
+    from .exceptions import (
+        DataLoadError,
+        DicomReadError,
+        InvalidClusterCountError,
+        ShapeMismatchError,
+        ValidationError,
+    )
+except ImportError:
+    from exceptions import (
+        DataLoadError,
+        DicomReadError,
+        InvalidClusterCountError,
+        ShapeMismatchError,
+        ValidationError,
+    )
+try:
+    from .custom_types import (
+        BinaryMask,
+        Centroids,
+        ClusterLabels,
+        ImageStack,
+        TimeCurves,
+        TriggerTimes,
+    )
+except ImportError:
+    from custom_types import (
+        BinaryMask,
+        Centroids,
+        ClusterLabels,
+        ImageStack,
+        TimeCurves,
+        TriggerTimes,
+    )
 
 
 logger = logging.getLogger(__name__)

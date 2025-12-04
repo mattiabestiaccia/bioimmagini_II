@@ -44,18 +44,34 @@ from tqdm import tqdm
 # Aggiungi src al path per import
 sys.path.insert(0, str(Path(__file__).parent))
 
-from .exceptions import (
-    ClusteringError,
-    DataLoadError,
-    ValidationError,
-)
-from .kmeans_segmentation import perform_kmeans_clustering, postprocess_masks
-from .utils import (
-    dice_coefficient,
-    identify_tissue_clusters,
-    load_gold_standard,
-    load_perfusion_series,
-)
+try:
+    from .exceptions import (
+        ClusteringError,
+        DataLoadError,
+        ValidationError,
+    )
+except ImportError:
+    from exceptions import (
+        ClusteringError,
+        DataLoadError,
+        ValidationError,
+    )
+try:
+    from .kmeans_segmentation import perform_kmeans_clustering, postprocess_masks
+    from .utils import (
+        dice_coefficient,
+        identify_tissue_clusters,
+        load_gold_standard,
+        load_perfusion_series,
+    )
+except ImportError:
+    from kmeans_segmentation import perform_kmeans_clustering, postprocess_masks
+    from utils import (
+        dice_coefficient,
+        identify_tissue_clusters,
+        load_gold_standard,
+        load_perfusion_series,
+    )
 
 
 logger = logging.getLogger(__name__)

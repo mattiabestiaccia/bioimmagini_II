@@ -11,6 +11,7 @@ Author: Biomedical Imaging Course
 Date: 2025
 """
 
+print("DEBUG: Script started", flush=True)
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon

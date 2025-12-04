@@ -592,20 +592,41 @@ La riduzione di MSE tra moving e fixed indica:
 
 ---
 
-## Risultati Attesi
+## Risultati Ottenuti
 
-### Quantitativi
+Di seguito sono riportati i risultati generati dall'esecuzione della pipeline di registrazione.
 
-1. **MSE Reduction**: 40-60% per within-cluster registration
-2. **Perfusion Curve Smoothness**: Improvement 50-70%
-3. **Cluster Separation**: Clear separation of pre/post contrast (MSE ratio ~5-10x)
+### 1. Clustering Gerarchico
 
-### Qualitativi
+Il dendrogramma mostra la struttura gerarchica delle immagini. Si notano chiaramente due raggruppamenti principali, corrispondenti alle fasi pre-contrasto e post-contrasto.
 
-1. **Dendrogram**: Two main branches (pre/post contrast)
-2. **Cluster Assignment**: Temporal continuity within clusters
-3. **Registration**: Aligned kidney contours in checkerboard
-4. **Perfusion Curves**: Smooth, physiologically plausible curves
+![Dendrogramma](results/dendrogram.png)
+
+L'assegnazione dei cluster conferma la separazione temporale:
+
+![Assegnazione Cluster](results/cluster_assignment.png)
+
+### 2. Registrazione Intra-Cluster (Within-Cluster)
+
+Esempio di registrazione all'interno del Cluster 0 (fase pre-contrasto). Si noti la riduzione delle differenze (mappa di calore) e l'allineamento nel checkerboard.
+
+![Registrazione Cluster 0](results/Within_Cluster_0_Registration.png)
+
+Esempio per il Cluster 1 (fase post-contrasto):
+
+![Registrazione Cluster 1](results/Within_Cluster_1_Registration.png)
+
+### 3. Registrazione Inter-Cluster (Between-Cluster)
+
+Registrazione tra il riferimento del Cluster 1 e il riferimento globale (Cluster 0). Questo passo allinea le due fasi principali della perfusione.
+
+![Registrazione Inter-Cluster](results/Between_Clusters_1_to_0_Registration.png)
+
+### 4. Curve di Perfusione
+
+Il grafico sottostante mostra le curve di perfusione prima e dopo la registrazione. La curva registrata (arancione) appare più "smooth" e fisiologicamente plausibile, con meno oscillazioni dovute al respiro rispetto alla curva originale (blu).
+
+![Curve di Perfusione](results/perfusion_curves.png)
 
 ### Parametri Ottimali
 

@@ -35,8 +35,12 @@ import numpy as np
 # Aggiungi src al path per import
 sys.path.insert(0, str(Path(__file__).parent))
 
-from .exceptions import DataLoadError
-from .utils import extract_pixel_time_curves, load_perfusion_series, plot_time_curves
+try:
+    from .exceptions import DataLoadError
+    from .utils import extract_pixel_time_curves, load_perfusion_series, plot_time_curves
+except ImportError:
+    from exceptions import DataLoadError
+    from utils import extract_pixel_time_curves, load_perfusion_series, plot_time_curves
 
 
 logger = logging.getLogger(__name__)

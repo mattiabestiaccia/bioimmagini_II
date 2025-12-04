@@ -1,0 +1,149 @@
+---
+title: "Esercitazione 2: Filtraggio 3D su Fantoccio CT"
+author: "Bioimmagini Positano"
+date: "2025-12-04"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+lang: it
+---
+
+Ecco la conversione del documento PDF in formato Markdown strutturato secondo le tue specifiche.
+
+
+## Parte 1: Fondamenti Teorici e Concetti Pre-Esercitazione
+
+In questa sezione vengono analizzati i concetti fondamentali, le specifiche dei dati e le basi teoriche degli algoritmi necessari per lo svolgimento dell'esercitazione.
+
+### 1. Il Fantoccio e i Dati di Input
+L'esercitazione utilizza un fantoccio **TAC-PET** (RIDER Phantom), impiegato per il controllo di qualità in macchine ibride.
+* **Struttura Dati:** La directory `PHANTOM_CT_PET` contiene diverse serie. L'esercitazione si concentra sulla **serie 2 (Immagine 3D CT)**, composta da 63 slices.
+* **Caratteristiche dell'Immagine:**
+    * È presente un'area di *zero padding* (non ricostruita) con valore convenzionale $-3024$.
+    * L'area a segnale nullo (aria) ha valori intorno a $-1000$ HU (Hounsfield Units).
+    * Il fantoccio ha un valore medio intorno a $60$ HU.
+
+[Immagine_1]
+*(Immagine illustrativa del fantoccio e delle scansioni CT)*
+
+### 2. Gestione del Formato DICOM e Rescaling
+Le immagini DICOM spesso memorizzano i dati come *unsigned 16-bit integer* (interi positivi), anche se la scala Hounsfield (HU) prevede valori negativi. Per ottenere i valori fisici corretti, è necessario applicare una trasformazione lineare utilizzando i metadati DICOM:
+
+* **Rescale Intercept** (Tag `0028,1052`)
+* **Rescale Slope** (Tag `0028,1053`)
+
+La formula per convertire il valore intero memorizzato ($I$) nel valore corretto ($I_c$) è:
+
+$$I_c = \text{RescaleIntercept} + \text{RescaleSlope} \cdot I$$
+
+> **Nota Importante:** Alcune funzioni di lettura (come versioni datate di `dicomread` in MATLAB) potrebbero ignorare questi campi. È necessario implementare la conversione manualmente e trasformare i dati da `int16` a `double` per le elaborazioni successive.
+
+### 3. Isotropia del Volume
+Per applicare correttamente filtri tridimensionali, il volume dati deve essere isotropo (ossia, la risoluzione spaziale deve essere identica lungo gli assi x, y e z). Se i metadati indicano anisotropia, è necessario operare un'interpolazione trilineare.
+
+### 4. Algoritmi di Filtraggio 3D
+L'obiettivo è confrontare le prestazioni di diversi filtri in termini di rapporto segnale-rumore (**SNR**) e conservazione dei bordi (**Acutezza**).
+
+#### A. Filtro a Media Mobile
+Un filtro lineare di base che calcola la media dei voxel all'interno di un kernel definito (specificato come $7 \times 7 \times 7$).
+
+#### B. Filtro Gaussiano
+Un filtro di smussamento che utilizza una convoluzione con una funzione gaussiana. Il parametro $\sigma$ (deviazione standard) deve essere ottimizzato per bilanciare la riduzione del rumore e il mantenimento dei dettagli.
+
+#### C. Filtro Adattivo di Wiener 3D
+Il filtro di Wiener adatta il suo comportamento in base alla varianza locale dell'immagine. Poiché MATLAB fornisce solo l'implementazione 2D (`wiener2`), è necessario implementare la versione 3D.
+
+**Formulazione Teorica:**
+$$I_{W} = I_{MM} + \frac{(I_{VAR} - \sigma^{2})}{I_{VAR}}(I_{OR} - I_{MM})$$
+
+Dove:
+* $I_{W}$: Immagine risultante (Wiener).
+* $I_{OR}$: Immagine originale.
+* $I_{MM}$: Immagine filtrata a media mobile (media locale).
+* $I_{VAR}$: Mappa della varianza locale dell'immagine 3D.
+* $\sigma^2$: Varianza del rumore stimato (costante).
+
+**Logica Adattiva:**
+Il filtro si comporta diversamente a seconda del rapporto tra varianza locale e rumore stimato:
+1.  **Zone di bordo ($I_{VAR} \gg \sigma^2$):** Il termine frazionario tende a 1, quindi $I_W \approx I_{OR}$ (nessun filtraggio, preserva i dettagli).
+2.  **Zone omogenee ($I_{VAR} \approx \sigma^2$):** Il termine frazionario tende a 0, quindi $I_W \approx I_{MM}$ (massimo filtraggio).
+3.  **Condizione anomala ($I_{VAR} < \sigma^2$):** Matematicamente possibile per fluttuazioni statistiche, porterebbe a un coefficiente negativo. In questo caso si forza il comportamento a media mobile.
+
+**Implementazione Pratica:**
+La formula viene riscritta come:
+$$I_{W} = I_{MM} + \alpha(I_{OR} - I_{MM})$$
+
+Dove il coefficiente $\alpha$ è definito come:
+$$\alpha = \begin{cases} \frac{(I_{VAR} - \sigma^{2})}{I_{VAR}} & \text{se } I_{VAR} \ge \sigma^{2} \\ 0 & \text{altrove} \end{cases}$$
+
+---
+
+## Parte 2: Traccia Dettagliata dell'Esercitazione e Implementazione (MATLAB)
+
+Di seguito sono riportati i passaggi operativi per realizzare il software di analisi.
+
+### 1. Lettura e Pre-elaborazione Dati
+* Caricare il volume DICOM (serie 2) dalla directory `PHANTOM_CT_PET`.
+* Leggere i metadati `RescaleIntercept` e `RescaleSlope`.
+* Applicare la correzione dei valori per ottenere le unità Hounsfield (HU) corrette.
+* Convertire il volume dati in formato `double`.
+* [Immagine_2] *(Esempio di visualizzazione slice originale vs windowing)*
+
+### 2. Verifica e Correzione dell'Isotropia
+* Verificare le dimensioni dei voxel dai metadati DICOM.
+* Se il volume non è isotropo, eseguire una interpolazione trilineare.
+* **Funzioni suggerite:** `interp3`, `meshgrid` o `imresize3`.
+* Visualizzare il volume risultante (opzionale) con `volumeViewer`.
+
+### 3. Definizione dell'Ambiente di Analisi
+* Identificare la **slice centrale** del volume 3D.
+* Definire una **Region of Interest (ROI)** sufficientemente grande all'interno dell'area omogenea del fantoccio sulla slice centrale.
+* Questa ROI servirà per il calcolo dell'SNR in 2D, pur avendo applicato filtri 3D.
+
+### 4. Calcolo SNR di Riferimento (Originale)
+* Visualizzare l'immagine applicando un windowing corretto (campi `WindowCenter` e `WindowWidth` o valori manuali, vedi lista 50-500 nel testo).
+* Calcolare l'SNR sull'immagine originale non filtrata all'interno della ROI definita.
+
+### 5. Implementazione degli Algoritmi di Filtraggio
+
+#### A. Filtro a Media Mobile
+* Generare un kernel $7 \times 7 \times 7$.
+* Applicare la convoluzione 3D.
+* **Funzioni suggerite:** `fspecial3` (MATLAB >= R2018b), `imfilter`, o `conv3`.
+
+#### B. Filtro Gaussiano
+* Implementare il filtro con kernel $7 \times 7 \times 7$.
+* Ottimizzare il valore di sigma per massimizzare l'SNR mantenendo le transizioni.
+* **Funzioni suggerite:** `imgaussfilt3` (MATLAB >= R2018b) o `fspecial3` + `imfilter`.
+
+#### C. Filtro di Wiener 3D (Custom)
+* Stimare il parametro $\sigma^2$ (varianza del rumore) in una zona omogenea del fantoccio.
+* Calcolare $I_{MM}$ (già ottenuto al punto A).
+* Calcolare $I_{VAR}$ (Mappa della varianza locale 3D):
+    * Implementare una versione 3D equivalente a `stdfilt` o utilizzare calcoli basati su finestre mobili $7 \times 7 \times 7$.
+    * **Gestione Errori:** Nelle regioni di *zero padding* (dove $I_{VAR} = 0$), il calcolo diverge. Escludere tali regioni o sommare una piccola quantità $\epsilon$ al denominatore.
+* Applicare la formula con il coefficiente $\alpha$ condizionale descritta nella Parte 1.
+
+### 6. Valutazione delle Prestazioni (Metriche)
+Per ciascuna delle quattro immagini (Originale, Media Mobile, Gaussiana, Wiener), calcolare:
+1.  **SNR del fantoccio:** Utilizzando la ROI sulla slice centrale.
+2.  **Acutezza (Conservazione delle transizioni):**
+    * Estrarre un profilo di intensità perpendicolare al bordo del fantoccio (transizione fantoccio-sfondo).
+    * Il profilo deve misurare la pendenza o la larghezza della transizione.
+    * [Immagine_3] *(Esempio di estrazione profili perpendicolari)*
+
+### 7. Visualizzazione e Output Finale
+* Generare immagini che mostrino la differenza tra l'immagine filtrata e quella originale.
+* Creare un plot che confronti i profili estratti dalle quattro immagini.
+* Compilare la tabella finale dei risultati con la seguente struttura:
+
+| Immagine | SNR fantoccio | Acutezza |
+| :--- | :--- | :--- |
+| **Originale** | ... | ... |
+| **Filtrata media mobile** | ... | ... |
+| **Filtrata filtro Gaussiano** | ... | ... |
+| **Filtrata filtro di Wiener** | ... | ... |
+
+[NOTA AMBIGUITÀ] Il testo originale suggerisce di implementare la versione 3D di `stdfilt` ("necessario implementarne la versione 3D"). Non è specificato se sia consentito l'uso di funzioni più recenti come `movstd` o `stdfilt` (se supportano il 3D nelle versioni più recenti di MATLAB non menzionate esplicitamente nel testo). Si consiglia di implementare il calcolo della varianza locale manualmente tramite convoluzione o operazioni a finestra mobile per aderire strettamente alla richiesta didattica.

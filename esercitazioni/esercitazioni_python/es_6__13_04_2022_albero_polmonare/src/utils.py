@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Tuple, Optional, Dict, List
 from scipy import ndimage
 from scipy.interpolate import RegularGridInterpolator
-from skimage.morphology import skeletonize_3d, ball, binary_closing, binary_dilation
+from skimage.morphology import skeletonize, ball, binary_closing, binary_dilation
 from skimage.measure import label
 import warnings
 
@@ -386,7 +386,7 @@ def skeletonize_3d_clean(
         print("Skeletonization 3D in corso (puo' richiedere alcuni minuti)...")
 
     # Skeletonize
-    skeleton = skeletonize_3d(mask.astype(bool))
+    skeleton = skeletonize(mask.astype(bool))
     skeleton = skeleton.astype(np.uint8)
 
     if verbose:

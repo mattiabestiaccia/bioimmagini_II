@@ -17,7 +17,7 @@ from src.config import (
     PostProcessConfig,
     TissueType,
 )
-from src.types import BinaryMask, ImageStack, TimeCurves, TriggerTimes
+from src.custom_types import BinaryMask, ImageStack, TimeCurves, TriggerTimes
 
 
 # ============================================================================

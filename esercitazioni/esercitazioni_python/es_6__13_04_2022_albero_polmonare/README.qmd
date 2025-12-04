@@ -1,0 +1,795 @@
+---
+title: "Esercitazione 6: Analisi Albero Bronchiale"
+author: "Bioimmagini Positano"
+date: "2025-12-04"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+lang: it
+---
+
+
+## Descrizione
+
+Questa esercitazione implementa l'**analisi automatica dell'albero bronchiale** da immagini CT toraciche ad alta risoluzione per:
+
+- **Segmentazione del lume bronchiale** (aria nelle vie aeree)
+- **Estrazione della centerline** tramite skeletonization 3D
+- **Misurazione del diametro** lungo l'albero con sphere method
+
+L'analisi dell'albero polmonare e' fondamentale in pazienti con insufficienza respiratoria, dove patologie come BPCO, asma grave, o fibrosi possono causare restringimento del lume bronchiale o stenosi dei tratti terminali.
+
+---
+
+## Importanza Clinica
+
+### Anatomia Albero Bronchiale
+
+L'albero respiratorio si ramifica gerarchicamente dalla trachea fino agli alveoli:
+
+| Generazione | Struttura | Diametro (cm) | Lunghezza (cm) | Numero | Area sezione (cm²) |
+|-------------|-----------|---------------|----------------|--------|---------------------|
+| 0 | Trachea | 1.80 | 12.0 | 1 | 2.54 |
+| 1 | Bronchi primari | 1.22 | 4.8 | 2 | 2.33 |
+| 2 | Bronchi lobari | 0.83 | 1.9 | 4 | 2.13 |
+| 3 | Bronchi segmentali | 0.56 | 0.8 | 8 | 2.00 |
+| 4 | Bronchioli | 0.45 | 1.3 | 16 | 2.48 |
+| ... | ... | ... | ... | ... | ... |
+| 23 | Alveoli | 0.04 | 0.05 | 8×10⁶ | 10⁴ |
+
+### Patologie Diagnosticabili
+
+- **BPCO (Broncopneumopatia Cronica Ostruttiva)**: Infiammazione cronica con restringimento bronchiale
+- **Asma severa**: Ispessimento parete bronchiale e riduzione lume
+- **Fibrosi polmonare**: Distorsione architettura bronchiale
+- **Bronchiectasie**: Dilatazioni patologiche permanenti
+- **Stenosi post-trapianto**: Complicanza in pazienti trapiantati
+
+---
+
+## Dataset
+
+### Provenienza
+
+- **Source**: Cancer Imaging Archive (https://www.cancerimagingarchive.net/)
+- **Studio**: LIDC-IDRI (Lung Image Database Consortium - Image Database Resource Initiative)
+- **Paziente**: Anonimizzato, studio noduli polmonari
+- **Uso**: Validazione algoritmi di analisi immagine
+
+### Caratteristiche Acquisizione
+
+- **Modalita'**: CT (Computed Tomography) toracica
+- **Numero slice**: 148
+- **Formato**: DICOM
+- **Hounsfield Units**: Si (aria ~-1000 HU, tessuto molle ~50 HU)
+- **FOV**: Solo trachea e biforcazione bronchi primari
+- **Risoluzione**: Alta risoluzione (HRCT)
+
+### Parametri Tecnici
+
+Dalla metadata DICOM:
+- **PixelSpacing**: ~0.7 mm (variabile per paziente)
+- **SliceThickness**: ~2.5 mm (tipico per CT toracico)
+- **RescaleSlope**: 1.0
+- **RescaleIntercept**: -1024 (conversione a HU)
+
+---
+
+## Pipeline di Analisi
+
+### Flowchart
+
+```
+DICOM CT (148 slice)
+        ↓
+[1] Caricamento + Hounsfield Units
+        ↓
+[2] Verifica isotropia → [2b] Interpolazione (se necessaria)
+        ↓
+[3] Region Growing 3D (seed in trachea)
+        ↓
+[4] Filtraggio maschera (riempimento buchi)
+        ↓
+[5] Skeletonization 3D (centerline extraction)
+        ↓
+[6] Identificazione endpoints
+        ↓
+[7] Estrazione percorso (endpoint → trachea)
+        ↓
+[8] Sphere Method (diametro per ogni punto)
+        ↓
+[9] Grafico diametro vs distanza
+```
+
+---
+
+## Basi Teoriche
+
+### 1. Hounsfield Units (HU)
+
+Le immagini CT misurano l'attenuazione dei raggi X, espressa in **Hounsfield Units**:
+
+```
+HU = 1000 × (μ - μ_water) / (μ_water - μ_air)
+```
+
+Dove:
+- μ = coefficiente di attenuazione lineare del tessuto
+- μ_water = attenuazione acqua
+- μ_air = attenuazione aria
+
+**Scala HU**:
+- **Aria**: -1000 HU
+- **Polmone**: -500 a -900 HU (alveoli + aria)
+- **Grasso**: -100 a -50 HU
+- **Acqua**: 0 HU
+- **Tessuto molle**: +40 a +80 HU
+- **Osso**: +700 a +3000 HU
+
+**Conversione da valori grezzi DICOM**:
+```python
+HU = pixel_value * RescaleSlope + RescaleIntercept
+```
+
+### 2. Region Growing 3D
+
+Algoritmo di segmentazione iterativo che espande una regione dal seed:
+
+**Pseudocodice**:
+```
+mask = {seed}
+while mask cambia:
+    neighbors = voxel adiacenti a mask (26-connectivity)
+    mean_HU = media(intensita' in mask)
+
+    for each neighbor:
+        if |HU[neighbor] - mean_HU| < tolerance:
+            mask += neighbor
+```
+
+**Parametri critici**:
+- **Seed**: Punto iniziale nella trachea (HU ~-1000)
+- **Tolerance**: Variabilita' HU ammessa (~100 HU per aria)
+- **Connectivity**: 6 (faces), 18 (edges), 26 (vertices)
+
+**Vantaggi**:
+- Adatta a regioni con intensita' omogenea (aria nel lume)
+- Semplice e robusto
+- Computazionalmente veloce
+
+**Limitazioni**:
+- Sensibile a tolleranza (troppo alta → leak, troppo bassa → under-segmentation)
+- Richiede seed manuale
+
+### 3. Interpolazione Isotropa
+
+I volumi CT spesso hanno voxel anisotropi:
+- **In-plane resolution** (pixel spacing): ~0.5-1 mm
+- **Through-plane resolution** (slice thickness): 2-5 mm
+
+Per algoritmi 3D (skeletonization, sphere method) e' preferibile voxel cubici.
+
+**Metodo**:
+1. Calcola FOV: `FOV_i = n_voxel_i × spacing_i`
+2. Scegli target spacing = min(spacings) (massima risoluzione)
+3. Calcola nuove dimensioni: `n_new_i = FOV_i / target_spacing`
+4. Interpola con `RegularGridInterpolator` (trilineare)
+
+**Trade-off**:
+- ✅ Geometria corretta per algoritmi 3D
+- ✅ Distanze euclidee accurate
+- ❌ Aumento dimensioni array (memoria)
+- ❌ Tempo di calcolo
+
+### 4. Riempimento Buchi (Hole Filling)
+
+La segmentazione region growing puo' avere "buchi" (voxel background interni):
+
+**Metodi**:
+
+#### A. Chiusura Morfologica
+```python
+from scipy.ndimage import binary_closing
+mask_filled = binary_closing(mask, structure=ball(3))
+```
+
+#### B. Labeling Background
+```python
+from skimage.measure import label
+background = ~mask
+labeled_bg = label(background)
+external_bg = (labeled_bg == largest_component_label)
+mask_filled = ~external_bg
+```
+
+#### C. Binary Fill Holes
+```python
+from scipy.ndimage import binary_fill_holes
+mask_filled = binary_fill_holes(mask)
+```
+
+**Importanza**: Gli algoritmi di skeletonization richiedono maschere senza buchi.
+
+### 5. Skeletonization 3D (Medial Axis)
+
+Lo **skeleton** (o **medial axis**) e' l'insieme di punti equidistanti da almeno 2 punti del bordo.
+
+**Algoritmo**:
+- Erosione iterativa che preserva topologia
+- Implementato in `skimage.morphology.skeletonize_3d`
+- Basato su **thinning**: rimozione successiva voxel di superficie senza disconnettere regioni
+
+**Proprieta' skeleton**:
+- Thickness = 1 voxel
+- Preserva topologia (numero componenti connesse, loops, branches)
+- Centerline dell'albero bronchiale
+
+**Post-processing**:
+- Rimozione rami corti (spurs) tramite `min_branch_length`
+- Operazioni morfologiche: `clean`, `fill`, `remove`
+
+### 6. Sphere Method per Diametro Vascolare
+
+Il **sphere method** stima il diametro del lume come diametro della massima sfera inscrivibile.
+
+**Algoritmo**:
+```python
+for point in centerline:
+    for radius in [1, 2, 3, ...]:
+        sphere = ball(radius) centered at point
+
+        if all(sphere voxels) in mask:
+            max_radius = radius
+        else:
+            break
+
+    diameter = 2 * max_radius * voxel_spacing
+```
+
+**Vantaggi**:
+- Geometricamente accurato
+- Robusto a rumore
+- Standard per quantificazione vascolare
+
+**Implementazione**:
+```python
+from skimage.morphology import ball
+
+def sphere_method_diameter(mask, point, max_radius, spacing):
+    for r in range(1, max_radius + 1):
+        sphere = ball(r)
+        # Posiziona sfera centrata su point
+        # Verifica se tutti voxel sphere sono in mask
+        if not all_voxels_inside:
+            return 2 * (r - 1) * spacing
+```
+
+### 7. Estrazione Centerline Path
+
+Per strutture ramificate, esistono multipli percorsi. Strategia **greedy**:
+
+1. Identifica **endpoints** (voxel con 1 solo vicino nello skeleton)
+2. Parti da endpoint con z massima (ramo terminale)
+3. Iterativamente seleziona vicino con:
+   - **z decrescente** (verso trachea)
+   - **Distanza minima** tra vicini con stesso z
+
+**Pseudocodice**:
+```python
+path = [endpoint]
+visited = {endpoint}
+
+while True:
+    neighbors = skeleton_voxels adiacenti non visitati
+
+    if len(neighbors) == 0:
+        break
+
+    next_point = argmin(neighbors, key=lambda p: (p.z, distance(p, current)))
+
+    path.append(next_point)
+    visited.add(next_point)
+```
+
+---
+
+## Struttura Files
+
+```
+es_6__13_04_2022_albero_polmonare/
+├── README.md                             # Questa guida
+├── requirements.txt
+├── .gitignore
+├── data/
+│   ├── dicom/
+│   │   └── 3000522.000000-04919/        # 148 DICOM slice
+│   └── masks/                            # Maschere salvate (opzionale)
+├── docs/
+│   ├── Esercitazione_06_13_04_2022.pdf
+│   └── regionGrowing3D.m                 # MATLAB reference
+├── src/
+│   ├── __init__.py
+│   ├── utils.py                          # Funzioni core (~750 righe)
+│   └── bronchial_tree_analysis.py        # Script principale (~280 righe)
+├── results/                              # Output (generato a runtime)
+│   ├── diameter_measurements.txt
+│   ├── diameter_plot.png
+│   ├── bronchial_mask.npy               # (se --save_mask)
+│   ├── mask_filled.npy
+│   └── skeleton.npy
+├── notebooks/                            # Jupyter notebooks (opzionale)
+└── tests/                                # Unit tests (opzionale)
+```
+
+---
+
+## Installazione
+
+### 1. Setup Ambiente Virtuale
+
+```bash
+# Dalla directory esercitazione
+cd es_6__13_04_2022_albero_polmonare
+
+# Crea venv
+python3 -m venv venv
+
+# Attiva
+source venv/bin/activate  # Linux/Mac
+# oppure
+venv\Scripts\activate     # Windows
+```
+
+### 2. Installa Dipendenze
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+**Dipendenze**:
+- `numpy`: Array operations
+- `scipy`: Interpolazione, operazioni morfologiche
+- `scikit-image`: Skeletonization, morphology
+- `pydicom`: Lettura DICOM
+- `matplotlib`: Visualizzazione
+
+---
+
+## Esecuzione
+
+### Script Principale
+
+```bash
+cd src
+python bronchial_tree_analysis.py
+```
+
+**Output**:
+- Grafico diametro vs distanza
+- File TXT con misurazioni
+- Maschere NPY (opzionale)
+
+### Opzioni CLI
+
+```bash
+python bronchial_tree_analysis.py --help
+```
+
+**Parametri disponibili**:
+
+```
+--dicom_dir PATH              # Directory DICOM (default: ../data/dicom/3000522.000000-04919)
+--output_dir PATH             # Directory output (default: ../results)
+--seed_z INT                  # Coordinata Z seed trachea (default: 10)
+--seed_y INT                  # Coordinata Y seed trachea (default: 250)
+--seed_x INT                  # Coordinata X seed trachea (default: 250)
+--rg_tolerance FLOAT          # Tolleranza region growing HU (default: 100.0)
+--skip_interpolation          # Salta interpolazione isotropa
+--load_mask PATH              # Carica maschera pre-segmentata (.npy)
+--save_mask                   # Salva maschera segmentata
+```
+
+### Esempi
+
+#### Esecuzione standard
+```bash
+python bronchial_tree_analysis.py --save_mask
+```
+
+#### Con seed personalizzato
+```bash
+python bronchial_tree_analysis.py --seed_z 15 --seed_y 300 --seed_x 280 --rg_tolerance 120
+```
+
+#### Carica maschera pre-calcolata (veloce)
+```bash
+# Prima esecuzione
+python bronchial_tree_analysis.py --save_mask
+
+# Esecuzioni successive
+python bronchial_tree_analysis.py --load_mask ../results/bronchial_mask.npy
+```
+
+---
+
+## Output Attesi
+
+### Valori di Riferimento
+
+Dalla letteratura anatomica:
+
+- **Diametro trachea**: 15-18 mm
+- **Diametro bronchi primari**: 10-12 mm
+- **Lunghezza trachea**: ~12 cm
+- **Lunghezza bronchi primari**: ~4.8 cm
+
+### File Generati
+
+#### `diameter_measurements.txt`
+
+```
+ANALISI ALBERO BRONCHIALE - RISULTATI
+==================================================
+
+Seed: (10, 250, 250)
+Region growing tolerance: 100.0 HU
+Voxel spacing: 0.703 mm
+
+Voxel segmentati: 125340
+Endpoints: 4
+Centerline punti: 287
+
+Lunghezza centerline: 201.5 mm
+Diametro trachea stimato: 16.42 mm
+Diametro massimo: 17.85 mm
+Diametro minimo: 4.22 mm
+
+VALORI ATTESI:
+--------------------------------------------------
+Diametro trachea: 15-18 mm
+Diametro bronchi primari: 10-12 mm
+
+DATI:
+--------------------------------------------------
+distance_mm    diameter_raw    diameter_smooth
+0.00           16.45           16.32
+1.21           16.38           16.29
+...
+```
+
+#### `diameter_plot.png`
+
+Grafico con:
+- Linea blu chiara: Diametri grezzi (RAW)
+- Linea rossa: Diametri smoothed (SMOOTHED)
+- Linee verdi tratteggiate: Range trachea (15-18 mm)
+- Linee arancioni tratteggiate: Range bronchi (10-12 mm)
+
+---
+
+## Note Tecniche
+
+### Parametri Critici
+
+#### 1. Seed Position
+
+Il seed deve essere nella **trachea** (regione con HU ~-1000):
+
+- **Troppo in alto** (z basso): Rischio di includere esofago
+- **Troppo in basso** (z alto): Potrebbe partire da bronco invece che trachea
+- **Off-center**: Rischio leak verso polmone
+
+**Suggerimento**: Visualizza slice con matplotlib per identificare coordinate ottimali.
+
+#### 2. Region Growing Tolerance
+
+- **Tolerance troppo bassa** (< 50 HU): Under-segmentation, albero incompleto
+- **Tolerance ottimale** (80-120 HU): Segmenta lume bronchiale pulito
+- **Tolerance troppo alta** (> 150 HU): Leaking nel parenchima polmonare
+
+#### 3. Min Branch Length (Skeletonization)
+
+- **Valore basso** (< 5 voxel): Skeleton con molti spurs (rami spurie)
+- **Valore ottimale** (5-15 voxel): Centerline pulita
+- **Valore alto** (> 20 voxel): Rischio rimozione bronchi reali
+
+### Performance
+
+Su workstation standard (CPU Intel i7):
+
+- **Caricamento DICOM** (148 slice): ~2-3 s
+- **Interpolazione isotropa**: ~5-10 s (dipende da factor)
+- **Region growing 3D**: ~30-90 s (dipende da tolerance e connectivity)
+- **Skeletonization 3D**: ~60-120 s (algoritmo computazionalmente intensivo)
+- **Sphere method** (287 punti): ~10-15 s
+- **Totale**: ~2-4 minuti
+
+**Ottimizzazioni**:
+- Salvare maschera con `--save_mask` e riutilizzare con `--load_mask`
+- Usare `--skip_interpolation` se non necessaria isotropia
+- Ridurre `max_radius` in `sphere_method_diameter` se lume piccolo
+
+### Limitazioni
+
+1. **Copertura anatomica limitata**: Dataset copre solo trachea e prima biforcazione (non bronchi generazioni 3+)
+2. **Seed manuale**: Richiede identificazione visuale del seed ottimale
+3. **Centerline path semplificato**: Algoritmo greedy puo' non trovare percorso ottimale in strutture complesse
+4. **Sphere method**: Assume lume circolare (approssimazione ragionevole per bronchi)
+
+---
+
+## Validazione
+
+### Confronto con Gold Standard
+
+Se disponibile segmentazione manuale da radiologo:
+
+```python
+from sklearn.metrics import jaccard_score
+
+# DICE coefficient
+dice = 2 * intersection / (|mask_auto| + |mask_manual|)
+
+# Jaccard Index (IoU)
+iou = intersection / union
+```
+
+### Range Fisiologici
+
+Verificare che:
+- Diametro trachea ∈ [15, 18] mm
+- Diametro bronchi primari ∈ [10, 12] mm
+- Lunghezza trachea ~120 mm
+- Transizione smooth (no salti bruschi diametro)
+
+### Ispezione Visuale
+
+Visualizza slice con overlay maschera:
+
+```python
+import matplotlib.pyplot as plt
+
+mid_slice = volume.shape[0] // 2
+
+plt.figure(figsize=(12, 6))
+plt.subplot(1, 2, 1)
+plt.imshow(volume[mid_slice], cmap='gray', vmin=-1000, vmax=200)
+plt.title('CT Originale')
+
+plt.subplot(1, 2, 2)
+plt.imshow(volume[mid_slice], cmap='gray', vmin=-1000, vmax=200)
+plt.imshow(mask[mid_slice], cmap='Reds', alpha=0.5)
+plt.title('Overlay Segmentazione')
+plt.show()
+```
+
+---
+
+## Troubleshooting
+
+### Problema: Region growing non converge
+
+**Sintomo**: Algoritmo continua per molte iterazioni senza fermarsi
+
+**Cause**:
+- Tolerance troppo alta → leak nel parenchima
+- Seed in regione non omogenea
+
+**Soluzioni**:
+- Riduci `rg_tolerance` (prova 80-100 HU)
+- Verifica HU al seed: `volume[seed]` dovrebbe essere ~-1000
+- Imposta `max_iterations` come failsafe
+
+### Problema: Skeleton vuoto o molto piccolo
+
+**Sintomo**: `skeletonize_3d` ritorna pochi voxel
+
+**Cause**:
+- Maschera troppo piccola o frammentata
+- `min_branch_length` troppo alto
+
+**Soluzioni**:
+- Verifica `np.sum(mask)` > 50000 voxel
+- Riduci `min_branch_length` a 3-5
+- Applica `fill_holes_3d` prima di skeletonization
+
+### Problema: Nessun endpoint trovato
+
+**Sintomo**: `find_skeleton_endpoints` ritorna array vuoto
+
+**Cause**:
+- Skeleton troppo piccolo
+- Skeleton e' un loop chiuso (nessun endpoint)
+
+**Soluzioni**:
+- Verifica forma skeleton con `np.sum(skeleton)`
+- Visualizza skeleton con `matplotlib` o `mayavi`
+- Usa connectivity 6 invece di 26 in region growing
+
+### Problema: Diametri irrealistici (< 5 mm o > 25 mm)
+
+**Sintomo**: Valori fuori range fisiologico
+
+**Cause**:
+- Voxel spacing errato (non isotropo)
+- `max_radius` troppo basso/alto
+- Maschera con artefatti
+
+**Soluzioni**:
+- Verifica `metadata['pixel_spacing']` e `slice_thickness`
+- Usa interpolazione isotropa (rimuovi `--skip_interpolation`)
+- Aumenta `max_radius` a 40-50 per trachea larga
+
+### Problema: Centerline path troppo corto
+
+**Sintomo**: Path ha < 50 punti, lunghezza < 50 mm
+
+**Cause**:
+- Endpoint selezionato sbagliato
+- Algoritmo greedy bloccato a biforcazione
+
+**Soluzioni**:
+- Prova altri endpoint: `endpoints[np.argmax(endpoints[:, 0])]` → prova `endpoints[1]`, `endpoints[2]`
+- Modifica criterio selezione in `extract_centerline_path`
+- Usa algorithm piu' sofisticato (Dijkstra su grafo skeleton)
+
+---
+
+## Estensioni Possibili
+
+### 1. Analisi Albero Completo
+
+Estendere a tutte le generazioni bronchiali:
+
+```python
+# Per ogni endpoint
+for endpoint in endpoints:
+    path = extract_centerline_path(skeleton, endpoint)
+    distances, diameters = measure_diameter_along_path(mask, path)
+
+    # Plot su stesso grafico
+    plt.plot(distances, diameters, label=f'Branch {i}')
+```
+
+### 2. Ricostruzione 3D Interattiva
+
+Usa Mayavi o VTK per visualizzazione 3D:
+
+```python
+from mayavi import mlab
+
+# Volume rendering
+mlab.contour3d(mask_filled, contours=[0.5], color=(1, 0, 0), opacity=0.3)
+
+# Skeleton
+skeleton_coords = np.argwhere(skeleton > 0)
+mlab.points3d(skeleton_coords[:, 0], skeleton_coords[:, 1], skeleton_coords[:, 2],
+              scale_factor=1, color=(0, 0, 1))
+
+mlab.show()
+```
+
+### 3. Segmentazione Automatica Seed
+
+Identificazione automatica trachea:
+
+```python
+# Trova regione con HU ~-1000 e forma ellittica in slice superiori
+top_slices = volume[:20]  # Prime 20 slice
+
+for z in range(len(top_slices)):
+    slice_2d = top_slices[z]
+    air_mask = (slice_2d < -900) & (slice_2d > -1100)
+
+    # Labeling
+    labeled = label(air_mask)
+
+    # Trova blob piu' grande (trachea)
+    props = regionprops(labeled)
+    largest = max(props, key=lambda p: p.area)
+
+    # Centroid come seed
+    seed = (z, int(largest.centroid[0]), int(largest.centroid[1]))
+```
+
+### 4. Quantificazione Wall Thickness
+
+Misura spessore parete bronchiale (importante per asma/BPCO):
+
+```python
+# Maschera lume (da region growing)
+lumen_mask = mask
+
+# Dilata per ottenere parete esterna
+outer_wall = binary_dilation(lumen_mask, ball(5))
+
+# Wall = outer - lumen
+wall_mask = outer_wall - lumen_mask
+
+# Thickness = distanza media lumen → outer
+from scipy.ndimage import distance_transform_edt
+wall_thickness_map = distance_transform_edt(wall_mask)
+```
+
+### 5. Machine Learning per Segmentazione
+
+Usa U-Net pre-trained:
+
+```python
+from tensorflow.keras.models import load_model
+
+# Load pre-trained model
+unet = load_model('airway_segmentation_unet.h5')
+
+# Predict mask
+mask_pred = unet.predict(volume[np.newaxis, ..., np.newaxis])
+mask_binary = (mask_pred > 0.5).astype(np.uint8)
+```
+
+---
+
+## Riferimenti
+
+### Paper Principali
+
+1. **Tschirren et al., 2005**
+   - *"Intrathoracic airway trees: segmentation and airway morphology analysis from low-dose CT scans"*
+   - IEEE Transactions on Medical Imaging
+   - **Contributo**: Algoritmi state-of-the-art per segmentazione bronchi
+
+2. **Kiraly et al., 2002**
+   - *"Three-dimensional human airway segmentation methods for clinical virtual bronchoscopy"*
+   - Academic Radiology
+   - **Contributo**: Sphere method per diametro vascolare
+
+3. **Lo et al., 2010**
+   - *"Extraction of airways from CT (EXACT'09)"*
+   - IEEE Transactions on Medical Imaging
+   - **Contributo**: Benchmark dataset e metriche valutazione
+
+### Dataset Pubblici
+
+4. **LIDC-IDRI**
+   - https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI
+   - 1018 pazienti con CT torace
+   - Annotazioni noduli polmonari
+
+5. **Cancer Imaging Archive**
+   - https://www.cancerimagingarchive.net/
+   - Repository open-access imaging biomedico
+
+### Software Clinici
+
+6. **YACTA (Yet Another CT Analyzer)**
+   - Software open-source per analisi quantitativa airways
+   - https://www.yacta.org/
+
+7. **3D Slicer Chest Imaging Platform**
+   - https://chestimagingplatform.org/
+   - Moduli per segmentazione e analisi airways
+
+### Fisica CT
+
+8. **Bushberg et al., 2012**
+   - *"The Essential Physics of Medical Imaging"*
+   - Lippincott Williams & Wilkins
+   - **Contributo**: Fisica CT e Hounsfield Units
+
+---
+
+## Contatti e Supporto
+
+**Sviluppato con**: Claude Code
+**Data**: 2025-11-20
+**Basato su**: Esercitazione MATLAB originale (13/04/2022)
+
+Per domande o bug, riferirsi al corso di Bioimmagini, Universita' di Positano.
+
+---
+
+## License
+
+Materiale didattico. Solo uso accademico.

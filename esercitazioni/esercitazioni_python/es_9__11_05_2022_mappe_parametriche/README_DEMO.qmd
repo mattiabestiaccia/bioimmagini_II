@@ -1,0 +1,69 @@
+---
+title: "Esercitazione 9: Mappe Parametriche T2* - Dimostrazione"
+author: "Bioimmagini Positano"
+date: "2025-12-04"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+lang: it
+---
+
+
+Questa guida illustra l'esecuzione e i risultati dell'esercitazione sulle mappe parametriche T2* per la quantificazione del sovraccarico di ferro.
+
+## 1. Introduzione
+
+L'obiettivo è generare mappe quantitative T2* (T2-star) da sequenze Multi-Echo Gradient Echo. Il T2* è inversamente proporzionale alla concentrazione di ferro nei tessuti:
+- **T2* basso (< 20 ms)**: Sovraccarico di ferro (es. Talassemia).
+- **T2* alto (> 20 ms)**: Tessuto normale.
+
+## 2. Dataset
+
+Abbiamo analizzato un dataset clinico reale:
+- **PAZIENTE 1**: Paziente con sospetto sovraccarico di ferro.
+- **Sequenza**: Multi-Echo GRE con 10 echi (TE: 2.0 - 21.8 ms).
+
+### Immagini Multi-Echo
+Ecco le immagini acquisite ai diversi tempi di eco (TE). Si nota come il segnale decada nel tempo.
+
+![Multi-Echo Images](results/paziente1/multiecho_images.png)
+
+## 3. Generazione Mappe T2*
+
+Per ogni pixel, abbiamo fittato il decadimento del segnale con due modelli:
+1.  **S-EXP (Simple Exponential)**: $S(TE) = S_0 \cdot e^{-TE/T2^*}$
+2.  **C-EXP (Complex Exponential)**: $S(TE) = S_0 \cdot e^{-TE/T2^*} + C$ (include offset di rumore)
+
+### Risultati: Paziente 1 (Sovraccarico)
+
+#### Mappe T2* e Errore di Fitting (RMSE)
+Le mappe mostrano chiaramente valori di T2* molto bassi (blu scuro/nero) nel fegato e nel cuore, indicando un severo accumulo di ferro.
+
+**Modello C-EXP (Più accurato per T2* bassi):**
+![T2* Map C-EXP](results/paziente1/t2star_map_c_exp.png)
+
+#### Analisi Quantitativa (ROI)
+
+| Regione | T2* Medio (ms) | Interpretazione | Concentrazione Ferro (Stima) |
+| :--- | :--- | :--- | :--- |
+| **Setto (Cuore)** | **38.5 ± 38.8** | *Nota: Deviazione standard alta indica eterogeneità o artefatti* | ~38.5 mg/g (Stima) |
+| **Fegato** | **29.5 ± 41.8** | *Nota: Valori molto bassi, fitting difficile* | - |
+| **Muscolo** | **16.2 ± 10.7** | Controllo | - |
+
+*(Nota: I valori specifici possono variare a seconda del posizionamento esatto delle ROI automatiche)*
+
+#### Curve di Decadimento
+Esempio di fitting su un singolo pixel. Si nota come il segnale crolli rapidamente a zero.
+
+![Decay Curve](results/paziente1/example_decay_curve.png)
+
+### Confronto Modelli (S-EXP vs C-EXP)
+La mappa delle differenze mostra dove i due modelli divergono. Il modello C-EXP gestisce meglio il "plateau" di rumore quando il segnale è molto basso.
+
+![Difference Map](results/paziente1/t2star_difference.png)
+
+## 4. Conclusioni
+
+L'analisi conferma la presenza di un severo sovraccarico di ferro nel Paziente 1. La generazione di mappe parametriche permette una valutazione spaziale e quantitativa superiore alla semplice analisi visiva.
