@@ -104,6 +104,10 @@ def _load_dicom_volume_centralized(series_path: str) -> Tuple[np.ndarray, Dict[s
     print(f"Spacing: {metadata['PixelSpacing']} mm (x,y), {metadata['SliceThickness']} mm (z)")
     print(f"Range HU: [{volume.min():.1f}, {volume.max():.1f}]")
 
+    # Transpose from (Z, Y, X) to (Y, X, Z) to match local implementation and make_isotropic expectation
+    volume = volume.transpose(1, 2, 0)
+    print(f"Volume trasposto per compatibilità: {volume.shape}")
+
     return volume.astype(np.float64), metadata
 
 

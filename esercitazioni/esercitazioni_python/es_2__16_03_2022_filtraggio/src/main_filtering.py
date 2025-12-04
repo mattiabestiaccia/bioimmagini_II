@@ -18,17 +18,14 @@ from pathlib import Path
 import sys
 from typing import Tuple
 
-# Aggiungi src al path
-sys.path.insert(0, str(Path(__file__).parent))
-
-from dicom_utils import load_dicom_volume, make_isotropic, check_isotropy
-from filters_3d import (
+from .dicom_utils import load_dicom_volume, make_isotropic, check_isotropy
+from .filters_3d import (
     moving_average_filter_3d,
     gaussian_filter_3d,
     wiener_filter_3d,
     estimate_noise_variance
 )
-from metrics import (
+from .metrics import (
     calculate_snr,
     create_circular_roi,
     extract_profile,

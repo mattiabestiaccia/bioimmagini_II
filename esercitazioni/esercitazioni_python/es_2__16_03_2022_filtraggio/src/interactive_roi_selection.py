@@ -11,12 +11,8 @@ I valori selezionati vengono stampati e possono essere copiati in main_filtering
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).parent))
-
-from dicom_utils import load_dicom_volume, make_isotropic, check_isotropy
-from metrics import create_circular_roi, extract_profile
+from .dicom_utils import load_dicom_volume, make_isotropic, check_isotropy
+from .metrics import create_circular_roi, extract_profile
 
 
 def interactive_roi_selection():
