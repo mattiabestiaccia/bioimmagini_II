@@ -11,7 +11,6 @@ Author: Biomedical Imaging Course
 Date: 2025
 """
 
-print("DEBUG: Script started", flush=True)
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
@@ -67,7 +66,7 @@ def plot_t2star_maps(t2star_map: np.ndarray, rmse_map: np.ndarray,
     cbar1.set_label('T2* (ms)', fontsize=12)
 
     # RMSE map
-    im2 = axes[0].imshow(rmse_map, cmap='hot', vmin=0)
+    im2 = axes[1].imshow(rmse_map, cmap='hot', vmin=0)
     axes[1].set_title(f'Fitting Error ({model_name})', fontsize=14, weight='bold')
     axes[1].axis('off')
     cbar2 = plt.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
