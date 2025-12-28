@@ -8,9 +8,10 @@
 
 ## Riepilogo Sessione
 
-Questa sessione ha lavorato su due esercitazioni:
-1. **Esercitazione 4**: Funzione Cardiaca (Segmentazione a Contorni)
-2. **Esercitazione 5**: Segmentazione Grasso Addominale (SAT/VAT)
+Questo branch contiene il lavoro sull'esercitazione 4:
+- **Esercitazione 4**: Funzione Cardiaca (Segmentazione a Contorni)
+
+> **Nota**: L'esercitazione 5 e' stata spostata nel branch dedicato `feature/es_5`
 
 ---
 
@@ -78,7 +79,6 @@ python src/cardiac_function_analysis.py --seed_radius 15 --smoothing 4 --n_itera
 - `src/cardiac_function_analysis.py`: Propagazione centri diastole->sistole
 - `WORK_IN_PROGRESS.md`: Documentazione dettagliata criticita'
 - `requirements.txt`: Dipendenze Python
-- `.venv/`: Virtual environment
 
 ### Prossimi Passi
 
@@ -86,108 +86,6 @@ python src/cardiac_function_analysis.py --seed_radius 15 --smoothing 4 --n_itera
 - [ ] Implementare edge-based active contours
 - [ ] Aggiungere seed interattivo
 - [ ] Migliorare pre-processing immagini
-
----
-
-## Esercitazione 5: Segmentazione Grasso Addominale
-
-**Status**: ✅ COMPLETATA
-
-**Directory**: `esercitazioni_python/es_5__06_04_2022_segmentazione_grasso/`
-
-**Source MATLAB**: `esercitazioni_matlab/LEZIONE_11_06_04_2022 (Esercitazione segmentazione grasso)/`
-
-**Topic**: Quantificazione grasso addominale subcutaneo (SAT) e viscerale (VAT) da MRI T1-weighted
-
-### Overview
-
-Pipeline completa per segmentazione automatica grasso addominale:
-- **SAT (Subcutaneous Adipose Tissue)**: Grasso sottocutaneo
-- **VAT (Visceral Adipose Tissue)**: Grasso viscerale
-- **VAT/SAT ratio**: Indice rischio cardiovascolare
-
-### Dataset
-
-- **Formato**: 18 slice DICOM assiali T1-weighted
-- **Risoluzione**: 256x256 pixel
-- **Pixel spacing**: 1.875 mm
-- **Slice thickness**: 5.0 mm
-- **Sequenza**: T1-weighted (grasso = segnale alto)
-
-### Pipeline Implementata
-
-1. **K-means Clustering (K=3)**: Separazione aria/muscolo/grasso
-2. **Connected Component Labeling**: Rimozione braccia (keep largest)
-3. **Active Contours (Chan-Vese)**:
-   - Contorno esterno (cute): 150 iterazioni
-   - Contorno interno (fascia): 100 iterazioni
-4. **EM-GMM (2 componenti)**: Classificazione VAT nella regione intra-addominale
-5. **Calcolo volumi**: Somma voxel x volume voxel
-
-### Risultati
-
-| Parametro | Calcolato | Riferimento | Errore | Status |
-|-----------|-----------|-------------|--------|--------|
-| SAT | 1840.5 cm³ | 2091 cm³ | **-12%** | Buono |
-| VAT | 1123.8 cm³ | 970 cm³ | **+16%** | Buono |
-| VAT/SAT | 61.1% | 46% | +15 punti | Accettabile |
-
-**Comando esecuzione**:
-```bash
-python src/fat_segmentation.py
-```
-
-### Output Generati
-
-```
-results/
-├── fat_segmentation_results.png   # Visualizzazione 6 pannelli
-└── fat_volumes.txt                # Report numerico
-```
-
-### File Struttura
-
-```
-es_5__06_04_2022_segmentazione_grasso/
-├── .venv/                    # Virtual environment
-├── data/dicom/               # 18 file DICOM (copiati)
-├── docs/                     # PDF esercitazione + paper
-├── results/                  # Output generati
-├── src/
-│   ├── utils.py              # Funzioni core (600+ righe)
-│   ├── fat_segmentation.py   # Pipeline principale
-│   └── visualize_results.py  # Visualizzazione avanzata
-├── requirements.txt
-└── README.md                 # Documentazione completa
-```
-
-### Valutazione
-
-- ✅ Pipeline funzionante end-to-end
-- ✅ Risultati entro margine accettabile (errore <20%)
-- ✅ Visualizzazioni chiare e informative
-- ✅ Documentazione completa
-
----
-
-## Riepilogo Finale
-
-| Esercitazione | Status | Accuratezza | Note |
-|---------------|--------|-------------|------|
-| Es. 4 - Funzione Cardiaca | ⚠️ WIP | Bassa | ESLV sovrastimato, EF errata |
-| Es. 5 - Grasso SAT/VAT | ✅ OK | Buona | Errori <20%, visivamente corretto |
-
-### Commit Suggeriti
-
-```bash
-# Es. 5 (pronto per commit)
-git add esercitazioni/esercitazioni_python/es_5__06_04_2022_segmentazione_grasso/
-git commit -m "feat(es_5): complete fat segmentation pipeline (SAT/VAT)"
-
-# Es. 4 (work in progress)
-git add esercitazioni/esercitazioni_python/es_4__30_03_2022_funzione_cardiaca/
-git commit -m "wip(es_4): cardiac function analysis - needs optimization"
-```
 
 ---
 
