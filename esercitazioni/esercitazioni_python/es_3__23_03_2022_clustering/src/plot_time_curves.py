@@ -40,7 +40,7 @@ try:
     from .utils import extract_pixel_time_curves, load_perfusion_series, plot_time_curves
 except ImportError:
     from exceptions import DataLoadError
-    from utils import extract_pixel_time_curves, load_perfusion_series, plot_time_curves
+    from utils import extract_pixel_time_curves, load_perfusion_series, plot_time_curves, crop_to_roi
 
 
 logger = logging.getLogger(__name__)
@@ -114,6 +114,47 @@ def get_default_pixel_coordinates() -> dict:
 
     return pixels
 
+
+def extract_roi_time_curves(
+    image_stack: np.ndarray,
+    pixel_coords: list[tuple[int, int]],
+    roi_size: int = 3
+) -> np.ndarray:
+    """
+    Estrae le curve medie da una ROI quadrata attorno ai pixel specificati.
+
+    Parameters
+    ----------
+    image_stack : np.ndarray
+        Stack di immagini (height, width, n_frames)
+    pixel_coords : list[tuple[int, int]]
+        Coordinate centrali (row, col)
+    roi_size : int
+        Dimensione lato ROI (dispari). Default: 3 (3x3)
+
+    Returns
+    -------
+    curves : np.ndarray
+        Curve medie (n_pixels, n_frames)
+    """
+    n_frames = image_stack.shape[2]
+    n_pixels = len(pixel_coords)
+    curves = np.zeros((n_pixels, n_frames), dtype=np.float32)
+    half_size = roi_size // 2
+
+    for i, (r, c) in enumerate(pixel_coords):
+        # Definisci ROI
+        r_start = max(0, r - half_size)
+        r_end = min(image_stack.shape[0], r + half_size + 1)
+        c_start = max(0, c - half_size)
+        c_end = min(image_stack.shape[1], c + half_size + 1)
+
+        # Estrai e media
+        roi_stack = image_stack[r_start:r_end, c_start:c_end, :]
+        # Media spaziale per ogni frame
+        curves[i, :] = np.mean(roi_stack, axis=(0, 1))
+
+    return curves
 
 def main() -> int:
     """Funzione principale dello script."""
@@ -257,7 +298,7 @@ Examples:
     pixel_coords = [pixels["rv"], pixels["lv"], pixels["myo"], pixels["background"]]
     labels = ["Right Ventricle (RV)", "Left Ventricle (LV)", "Myocardium", "Background"]
 
-    curves = extract_pixel_time_curves(image_stack, pixel_coords)
+    curves = extract_roi_time_curves(image_stack, pixel_coords, roi_size=3)
 
     print(f"  ✓ Estratte {len(curves)} curve con {curves.shape[1]} punti temporali")
 
@@ -281,7 +322,7 @@ Examples:
         curves,
         trigger_times,
         labels,
-        title="Cardiac Perfusion: Intensity/Time Curves",
+        title="Cardiac Perfusion: Intensity/Time Curves (3x3 ROI Average)",
         save_path=save_path
     )
 

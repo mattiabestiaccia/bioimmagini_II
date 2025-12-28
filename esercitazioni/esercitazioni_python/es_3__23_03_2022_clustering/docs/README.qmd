@@ -53,6 +53,8 @@ python plot_time_curves.py
 
 ## Analisi dei Risultati
 
+Verrà generato il grafico `results/time_curves.png`.
+
 ### 1. Curve Intensità-Tempo
 
 Il grafico `time_curves.png` mostra l'andamento temporale dell'intensità del segnale per i diversi tessuti.
@@ -63,12 +65,12 @@ Il grafico `time_curves.png` mostra l'andamento temporale dell'intensità del se
 Per ridurre il rumore intrinseco delle immagini MRI e ottenere curve più rappresentative, lo script `plot_time_curves.py` è stato modificato per estrarre la **media di una ROI 3x3** attorno al pixel selezionato, invece del valore di un singolo pixel.
 
 **Interpretazione:**
+-   **Ventricolo Destro (RV - Blu)**: Mostra un picco precoce e molto alto (wash-in rapido del contrasto).
+-   **Ventricolo Sinistro (LV - Rosso)**: Il picco avviene successivamente (dopo il passaggio polmonare) ed è leggermente più basso/largo.
+-   **Miocardio (Verde)**: L'enhancement è molto più graduale e basso rispetto ai ventricoli.
+-   **Background (Grigio)**: Segnale basso e costante (rumore di fondo).
 
-- **Ventricolo Destro (RV - Blu)**: Mostra un picco precoce e molto alto (wash-in rapido del contrasto).
-- **Ventricolo Sinistro (LV - Rosso)**: Il picco avviene successivamente (dopo il passaggio polmonare) ed è leggermente più basso/largo.
-- **Miocardio (Verde)**: L'enhancement è molto più graduale e basso rispetto ai ventricoli.
-- **Background (Grigio)**: Segnale basso e costante (rumore di fondo).
-
+Questa dinamica temporale è la base su cui lavora l'algoritmo K-means per distinguere i tessuti.
 Queste differenze sono le _features_ che useremo per il clustering.
 
 # Fase 2: Segmentazione Automatica (K-means)
@@ -143,11 +145,10 @@ python optimize_kmeans.py --quick
 ![Grafici di ottimizzazione.](results/optimization_results.png)
 
 **Conclusioni dall'ottimizzazione:**
-
-- Dai nostri test, la configurazione ottimale risulta essere **30 frame** con distanza **Euclidea**.
-- Questo suggerisce che la fase iniziale di "wash-in" (primi 30 frame) contiene le informazioni più discriminanti per separare il Ventricolo Destro (che ha un picco molto precoce) dagli altri tessuti.
-- L'uso di troppi frame (es. 60 o tutti) potrebbe introdurre rumore o diluire le differenze temporali nette.
-- La distanza Euclidea si è rivelata più efficace della Correlazione in questo specifico dataset.
+-   Dai nostri test, la configurazione ottimale risulta essere **30 frame** con distanza **Euclidea**.
+-   Questo suggerisce che la fase iniziale di "wash-in" (primi 30 frame) contiene le informazioni più discriminanti per separare il Ventricolo Destro (che ha un picco molto precoce) dagli altri tessuti.
+-   L'uso di troppi frame (es. 60 o tutti) potrebbe introdurre rumore o diluire le differenze temporali nette.
+-   La distanza Euclidea si è rivelata più efficace della Correlazione in questo specifico dataset.
 
 # Conclusioni
 

@@ -59,6 +59,7 @@ except ImportError:
 try:
     from .kmeans_segmentation import perform_kmeans_clustering, postprocess_masks
     from .utils import (
+        crop_to_roi,
         dice_coefficient,
         identify_tissue_clusters,
         load_gold_standard,
@@ -67,6 +68,7 @@ try:
 except ImportError:
     from kmeans_segmentation import perform_kmeans_clustering, postprocess_masks
     from utils import (
+        crop_to_roi,
         dice_coefficient,
         identify_tissue_clusters,
         load_gold_standard,
@@ -339,6 +341,14 @@ Examples:
         help="Random seed"
     )
 
+    parser.add_argument(
+        "--crop-roi",
+        nargs=4,
+        type=int,
+        metavar=("ROW_START", "ROW_END", "COL_START", "COL_END"),
+        help="ROI per crop (es: 50 200 50 200)"
+    )
+
     args = parser.parse_args()
 
     # Crea directory output
@@ -362,10 +372,28 @@ Examples:
         print(f"ERRORE: {e}")
         return 1
 
+    # Crop ROI se specificato
+    if args.crop_roi:
+        print(f"  → Crop ROI: {args.crop_roi}")
+        roi_tuple = tuple(args.crop_roi)
+        try:
+            image_stack = crop_to_roi(image_stack, roi_tuple)
+            print(f"  ✓ Nuove dimensioni: {image_stack.shape[0]}x{image_stack.shape[1]}")
+        except ValidationError as e:
+            logger.error(f"Failed to crop ROI: {e}")
+            print(f"ERRORE: {e}")
+            return 1
+
     # Carica gold standard
     try:
         gold_masks = load_gold_standard(args.gold_standard)
         print("  ✓ Gold standard caricato")
+
+        # Crop anche le maschere se necessario
+        if args.crop_roi:
+            for tissue in gold_masks:
+                gold_masks[tissue] = crop_to_roi(gold_masks[tissue], roi_tuple)
+
     except DataLoadError as e:
         logger.error(f"Failed to load gold standard: {e}")
         print(f"ERRORE: {e}")
