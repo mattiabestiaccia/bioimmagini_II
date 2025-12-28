@@ -341,19 +341,121 @@ def segment_lv_active_contour(image: np.ndarray,
     return segmentation_mask.astype(np.uint8)
 
 
+def find_lv_center(image: np.ndarray,
+                   roi_fraction: float = 0.5,
+                   prefer_left: bool = True) -> Tuple[int, int]:
+    """
+    Find the center of the left ventricle (LV) cavity in a cardiac MRI image.
+
+    The LV cavity appears bright in SSFP images. The LV is typically located
+    to the left of the RV (right ventricle) in short-axis views.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Input cardiac MRI image (2D)
+    roi_fraction : float, optional
+        Fraction of image to use as central ROI (default: 0.5)
+    prefer_left : bool, optional
+        Prefer bright regions more to the left (anatomically correct for LV)
+
+    Returns
+    -------
+    center : tuple of int
+        (y, x) coordinates of LV center
+    """
+    h, w = image.shape
+
+    # Define central ROI
+    margin = int((1 - roi_fraction) / 2 * min(h, w))
+    roi_y = slice(margin, h - margin)
+    roi_x = slice(margin, w - margin)
+
+    # Extract ROI
+    roi = image[roi_y, roi_x]
+    roi_h, roi_w = roi.shape
+
+    # Threshold to find bright regions (LV cavity)
+    threshold = np.percentile(roi, 80)
+    bright_mask = roi > threshold
+
+    # Label connected components
+    labeled, n_features = ndimage.label(bright_mask)
+
+    if n_features == 0:
+        # Fallback to ROI center
+        return (h // 2, w // 2)
+
+    # Find component properties
+    best_label = 1
+    best_score = -float('inf')
+
+    for i in range(1, n_features + 1):
+        comp_mask = (labeled == i)
+        size = np.sum(comp_mask)
+
+        # Skip very small or very large components
+        if size < 200 or size > 3000:
+            continue
+
+        cy_comp, cx_comp = ndimage.center_of_mass(comp_mask)
+
+        # Score based on:
+        # 1. Size (moderate size preferred for LV)
+        # 2. Position (left side preferred - lower x coordinate)
+        # 3. Compactness (LV is more circular than RV)
+
+        # Circularity: 4*pi*area / perimeter^2
+        from skimage import measure
+        contours = measure.find_contours(comp_mask.astype(float), 0.5)
+        if contours:
+            perimeter = sum(len(c) for c in contours)
+            circularity = 4 * np.pi * size / (perimeter ** 2) if perimeter > 0 else 0
+        else:
+            circularity = 0
+
+        # Score calculation
+        size_score = -abs(size - 800) / 500  # Prefer ~800 pixel components
+        position_score = (roi_w - cx_comp) / roi_w if prefer_left else 0  # Prefer left
+        circularity_score = circularity * 2  # Prefer circular shapes
+
+        score = size_score + position_score + circularity_score
+
+        if score > best_score:
+            best_score = score
+            best_label = i
+
+    # Get center of best component
+    best_mask = (labeled == best_label)
+    cy_roi, cx_roi = ndimage.center_of_mass(best_mask)
+
+    # Convert to full image coordinates
+    cy = int(cy_roi + margin)
+    cx = int(cx_roi + margin)
+
+    return (cy, cx)
+
+
 def refine_segmentation(mask: np.ndarray,
+                       seed_center: Optional[Tuple[int, int]] = None,
                        min_area: int = 100,
+                       max_area: int = 5000,
                        fill_holes: bool = True,
                        smooth_iterations: int = 2) -> np.ndarray:
     """
-    Refine segmentation mask by removing small components and filling holes.
+    Refine segmentation mask by keeping only the component near seed center.
 
     Parameters
     ----------
     mask : np.ndarray
         Binary segmentation mask
+    seed_center : tuple of int, optional
+        (y, x) coordinates of seed center. If provided, keeps only the
+        component containing or closest to this point.
     min_area : int, optional
         Minimum area for connected components (default: 100 pixels)
+    max_area : int, optional
+        Maximum area for LV (default: 5000 pixels, ~100 mL per slice)
     fill_holes : bool, optional
         Fill holes in segmentation (default: True)
     smooth_iterations : int, optional
@@ -366,16 +468,66 @@ def refine_segmentation(mask: np.ndarray,
     """
     refined_mask = mask.copy()
 
-    # Remove small connected components
+    # Label connected components
     labeled, num_features = ndimage.label(refined_mask)
+
+    if num_features == 0:
+        return refined_mask
+
+    # Get component properties
     component_sizes = ndimage.sum(refined_mask, labeled, range(1, num_features + 1))
 
-    # Keep only components larger than min_area
-    for i, size in enumerate(component_sizes, start=1):
-        if size < min_area:
-            refined_mask[labeled == i] = 0
+    if seed_center is not None:
+        # Keep only the component containing or closest to seed_center
+        cy, cx = seed_center
 
-    # Fill holes
+        # Check which component contains seed_center
+        if 0 <= cy < mask.shape[0] and 0 <= cx < mask.shape[1]:
+            label_at_seed = labeled[cy, cx]
+        else:
+            label_at_seed = 0
+
+        # Verify seed component has valid size
+        if label_at_seed > 0:
+            seed_size = component_sizes[label_at_seed - 1]
+            if min_area <= seed_size <= max_area:
+                component_label = label_at_seed
+            else:
+                # Seed component too large/small, find closest valid one
+                label_at_seed = 0
+
+        if label_at_seed == 0:
+            # Find closest component to seed with valid size
+            min_dist = float('inf')
+            component_label = None
+
+            for i in range(1, num_features + 1):
+                size = component_sizes[i - 1]
+                # Only consider components with reasonable size
+                if not (min_area <= size <= max_area):
+                    continue
+
+                comp_mask = (labeled == i)
+                comp_cy, comp_cx = ndimage.center_of_mass(comp_mask)
+                dist = np.sqrt((comp_cy - cy)**2 + (comp_cx - cx)**2)
+
+                if dist < min_dist:
+                    min_dist = dist
+                    component_label = i
+
+            # If no valid component found, return empty mask
+            if component_label is None:
+                return np.zeros_like(mask)
+
+        # Keep only selected component
+        refined_mask = (labeled == component_label).astype(np.uint8)
+    else:
+        # Original behavior: remove small components
+        for i, size in enumerate(component_sizes, start=1):
+            if size < min_area:
+                refined_mask[labeled == i] = 0
+
+    # Fill holes (papillary muscles)
     if fill_holes:
         refined_mask = ndimage.binary_fill_holes(refined_mask).astype(np.uint8)
 
