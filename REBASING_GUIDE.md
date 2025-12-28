@@ -9,7 +9,8 @@
 5. [Struttura Standard Esercitazione](#struttura-standard-esercitazione)
 6. [Convenzioni di Naming](#convenzioni-di-naming)
 7. [Quality Checklist](#quality-checklist)
-8. [Esercitazioni Completate](#esercitazioni-completate)
+8. [Report di Analisi Post-Completamento](#report-di-analisi-post-completamento)
+9. [Esercitazioni Completate](#esercitazioni-completate)
 
 ---
 
@@ -393,6 +394,223 @@ import argparse                 # CLI arguments
 - [ ] Output verificato vs riferimento
 - [ ] Edge cases considerati
 - [ ] Unit tests (opzionale ma raccomandato)
+
+---
+
+## 📝 Report di Analisi Post-Completamento
+
+**Una volta che l'esercitazione è completata e approvata**, creare un documento `REPORT.md` nella root dell'esercitazione per analizzare i risultati e documentare l'esperienza. Questo report sarà utile per la discussione con il professore.
+
+### Quando Creare il Report
+
+1. **Esercitazione completata**: Tutti i file convertiti, script funzionanti
+2. **Quality Checklist verificata**: Tutti i punti spuntati
+3. **Approvazione ottenuta**: Conferma che l'esercitazione è pronta
+
+### Struttura del REPORT.md
+
+```markdown
+# Report Esercitazione X - [Titolo]
+
+**Data completamento**: YYYY-MM-DD
+**Autore**: [Nome]
+**Versione Python**: [Versione implementata]
+
+---
+
+## 1. Sintesi dell'Esercitazione
+
+### Obiettivo
+[Breve descrizione dell'obiettivo didattico dell'esercitazione]
+
+### Algoritmi Implementati
+- [Algoritmo 1]: [breve descrizione]
+- [Algoritmo 2]: [breve descrizione]
+- ...
+
+### Dataset Utilizzato
+- **Tipo**: [DICOM, immagini, etc.]
+- **Dimensioni**: [numero file, risoluzione]
+- **Caratteristiche**: [specifiche rilevanti]
+
+---
+
+## 2. Analisi dei Risultati
+
+### Risultati Ottenuti
+| Parametro | Valore Ottenuto | Valore Atteso | Differenza |
+|-----------|-----------------|---------------|------------|
+| [param 1] | [valore]        | [riferimento] | [delta]    |
+| [param 2] | [valore]        | [riferimento] | [delta]    |
+
+### Accuratezza
+- **Accuratezza complessiva**: [percentuale]%
+- **Metriche specifiche**: [DICE, IoU, MSE, etc.]
+
+### Confronto con Implementazione MATLAB
+| Aspetto | MATLAB | Python | Note |
+|---------|--------|--------|------|
+| [aspetto 1] | [val] | [val] | [commento] |
+| [aspetto 2] | [val] | [val] | [commento] |
+
+---
+
+## 3. Performance
+
+### Tempi di Esecuzione
+| Operazione | Tempo | Note |
+|------------|-------|------|
+| Caricamento dati | [tempo] | |
+| Elaborazione | [tempo] | |
+| Visualizzazione | [tempo] | |
+| **Totale** | [tempo] | |
+
+### Risorse Utilizzate
+- **RAM**: [picco utilizzo]
+- **CPU**: [utilizzo medio]
+- **GPU**: [se applicabile]
+
+### Scalabilità
+[Commenti su come l'implementazione scala con dataset più grandi]
+
+---
+
+## 4. Problemi Riscontrati
+
+### Difficoltà Tecniche
+1. **[Problema 1]**
+   - **Descrizione**: [cosa non funzionava]
+   - **Causa**: [perché si verificava]
+   - **Soluzione**: [come è stato risolto]
+
+2. **[Problema 2]**
+   - **Descrizione**: ...
+   - **Causa**: ...
+   - **Soluzione**: ...
+
+### Differenze MATLAB/Python
+- **[Differenza 1]**: [spiegazione e come è stata gestita]
+- **[Differenza 2]**: [spiegazione e come è stata gestita]
+
+### Limitazioni Note
+- [Limitazione 1]: [descrizione e impatto]
+- [Limitazione 2]: [descrizione e impatto]
+
+---
+
+## 5. Miglioramenti Didattici Suggeriti
+
+### Cosa Ha Funzionato Bene
+- [Aspetto positivo 1]
+- [Aspetto positivo 2]
+
+### Cosa Potrebbe Essere Migliorato
+
+#### Nella Documentazione
+- [Suggerimento 1]
+- [Suggerimento 2]
+
+#### Negli Algoritmi
+- [Suggerimento 1]
+- [Suggerimento 2]
+
+#### Nel Dataset
+- [Suggerimento 1]
+- [Suggerimento 2]
+
+#### Nell'Approccio Didattico
+- [Suggerimento 1]
+- [Suggerimento 2]
+
+### Estensioni Possibili
+[Idee per sviluppi futuri o approfondimenti]
+
+---
+
+## 6. Conclusioni
+
+### Sintesi
+[Riassunto in 2-3 frasi dell'esito dell'esercitazione]
+
+### Competenze Acquisite
+- [Competenza 1]
+- [Competenza 2]
+- [Competenza 3]
+
+### Valutazione Personale
+[Riflessione sull'esperienza di apprendimento]
+
+---
+
+## Appendice
+
+### A. Comandi Eseguiti
+```bash
+# Comandi principali utilizzati durante l'esercitazione
+[comando 1]
+[comando 2]
+```
+
+### B. Riferimenti Consultati
+1. [Riferimento 1]
+2. [Riferimento 2]
+
+### C. Log Errori Significativi
+[Eventuali errori importanti e come sono stati risolti]
+```
+
+### Esempio di Sezioni Compilate
+
+**Sezione 4 - Problemi Riscontrati (esempio)**:
+
+```markdown
+### Difficoltà Tecniche
+
+1. **Parsing DICOM 4D**
+   - **Descrizione**: `dicomreadVolume` MATLAB non funzionava con il dataset
+   - **Causa**: I file DICOM non erano organizzati in modo standard
+   - **Soluzione**: Implementato parsing custom basato su ImagePositionPatient + TriggerTime
+
+2. **Segmentazione Chan-Vese**
+   - **Descrizione**: Contorni irregolari e leaking nel miocardio
+   - **Causa**: Troppi iterations senza smoothing adeguato
+   - **Soluzione**: Ridotto num_iter a 100, aumentato smoothing a 2.0
+```
+
+**Sezione 5 - Miglioramenti Didattici (esempio)**:
+
+```markdown
+### Cosa Potrebbe Essere Migliorato
+
+#### Nella Documentazione
+- Aggiungere una sezione sulla teoria di Chan-Vese nel PDF dell'esercitazione
+- Includere valori di riferimento per i parametri di segmentazione
+
+#### Nel Dataset
+- Fornire un dataset di validazione con ground truth manuale
+- Includere casi patologici per testare robustezza
+
+#### Nell'Approccio Didattico
+- Iniziare con un caso 2D semplice prima del 4D
+- Mostrare step intermedi della segmentazione
+```
+
+### Checklist Report
+
+- [ ] Tutti i risultati numerici documentati
+- [ ] Confronto con valori attesi/riferimento
+- [ ] Problemi riscontrati descritti con soluzioni
+- [ ] Suggerimenti didattici costruttivi
+- [ ] Conclusioni e competenze acquisite
+- [ ] Report revisionato e leggibile
+
+### Nota Importante
+
+> **Il REPORT.md è un documento personale di riflessione**, non un deliverable tecnico. L'obiettivo è:
+> - Consolidare l'apprendimento attraverso l'analisi critica
+> - Preparare punti di discussione per il colloquio con il professore
+> - Documentare l'esperienza per riferimento futuro
+> - Identificare aree di miglioramento (personali e del materiale didattico)
 
 ---
 
