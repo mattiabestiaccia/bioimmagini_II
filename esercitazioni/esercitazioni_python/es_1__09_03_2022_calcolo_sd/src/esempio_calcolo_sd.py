@@ -438,7 +438,7 @@ if __name__ == "__main__":
 
     # Setup paths
     script_dir = Path(__file__).parent
-    dicom_path = script_dir.parent / args.dicom
+    dicom_path = script_dir / args.dicom
     results_dir = script_dir.parent / "results" / "esempio_calcolo_sd"
     results_dir.mkdir(parents=True, exist_ok=True)
 
