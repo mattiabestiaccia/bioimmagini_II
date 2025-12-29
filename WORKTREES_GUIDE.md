@@ -114,7 +114,13 @@ git pull
 git worktree remove ../bioimmagini_positano_worktrees/es_4
 
 # Elimina il branch locale
-git branch -d feature/es_4
+git branch -d feature/es_4 L'esercitazione 7 dovrebbe essere completa da quello che mi dici in un'altra sessione.
+
+Ho fatto la pull request e dovrebbe aver terminato.
+
+A questo punto, sto cercando di rimuovere il work tree, ma mi dà un messaggio d'errore.
+
+Verifica lo stato attuale e fammi sapere come devo procedere. 
 ```
 
 ---

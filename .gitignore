@@ -160,3 +160,15 @@ coverage.xml
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+# ===================================
+# CLAUDE CODE (override global ignore)
+# ===================================
+
+# Track Claude Code project configuration
+!.claude/
+.claude/*
+!.claude/commands/
+!.claude/agents/
+!.claude/project_context.md
+# Keep settings.local.json ignored (personal)
