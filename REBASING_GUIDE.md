@@ -69,6 +69,31 @@
 
 ## 🔄 Workflow Standard per Conversione
 
+### Step 0: Spostarsi sul Worktree Corretto
+
+**PRIMA DI INIZIARE qualsiasi lavoro su un'esercitazione**, spostarsi sul worktree dedicato:
+
+```bash
+# Spostarsi sul worktree dell'esercitazione X
+cd /home/brusc/Projects/bioimmagini_positano_worktrees/es_X
+
+# Verificare di essere sul branch corretto
+git branch --show-current  # Deve mostrare: feature/es_X
+```
+
+**Perché usare i worktree?**
+- Ogni esercitazione ha il proprio branch isolato
+- Si può lavorare su più esercitazioni in parallelo senza conflitti
+- Le modifiche restano separate fino al merge
+- Non serve fare stash/switch tra branch
+
+**Lista worktree disponibili:**
+```bash
+git worktree list
+```
+
+---
+
 ### Step 1: Analisi Preliminare
 
 ```bash
