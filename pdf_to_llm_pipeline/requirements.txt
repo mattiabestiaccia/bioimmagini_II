@@ -1,0 +1,23 @@
+# PDF to LLM Pipeline - Dependencies
+# Python 3.11+ required
+
+# PDF to Markdown conversion
+# marker-pdf è la scelta migliore per dispense universitarie con formule matematiche
+# - Eccellente preservazione delle formule LaTeX
+# - Output strutturato con sezioni
+# - Supporto per immagini e tabelle
+marker-pdf>=1.0.0
+
+# Alternative: markitdown di Microsoft (più leggero ma meno preciso sulle formule)
+# markitdown>=0.1.0
+
+# Utilities
+pathlib2>=2.3.0;python_version<"3.4"
+
+# Optional: tokenizer reale per conteggio token accurato
+# Decommentare se si vuole usare tiktoken invece del proxy parole/caratteri
+# tiktoken>=0.5.0
+
+# Optional: per integrazione con vector DB (RAG)
+# chromadb>=0.4.0
+# langchain>=0.1.0
