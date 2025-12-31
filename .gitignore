@@ -9,6 +9,9 @@
 # Obsidian cache
 .obsidian/cache/
 
+# Smart Connections plugin cache
+.smart-env/
+
 # Obsidian sync/publish settings
 .obsidian/sync-config.json
 .obsidian/publish.json
