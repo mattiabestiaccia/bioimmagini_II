@@ -253,15 +253,30 @@ I file originali (86+86 righe) sono stati completamente ristrutturati in 6 nuovi
 - **Cart 3:** Tip che rimanda a Cart 6
 - **Cart 4:** Non conteneva descrizioni duplicate
 
-#### 5.3 Cartella 7 - PACS/RIS (PENDENTE - bassa priorità)
+#### 5.3 Cartella 7 - PACS/RIS (COMPLETATA ✅ 01/01/2026)
 
-**File attuali:**
-- `1. Intro.md` (22 righe)
-- `2. Sistemi PACS.md` (49 righe)
+**File originali:**
+- `1. Intro.md` (22 righe, con righe lunghissime)
+- `2. Sistemi PACS.md` (49 righe, con righe lunghissime = 42KB)
 
-**Azioni future opzionali:**
-- [ ] Espandere intro con collegamento elaborazione → refertazione
-- [ ] Separare RIS in file dedicato
+**Problemi risolti:**
+- ✅ Rimossi frammenti "Vincenzo Positano Modulo Elaborazione delle Bioimmagini – corso Bioimmagini" (footer PDF copiati erroneamente)
+- ✅ Convertite righe lunghissime in paragrafi formattati correttamente
+- ✅ Contenuto suddiviso in 7 file tematici
+
+**Nuova struttura (1098 righe totali):**
+
+| File | Contenuto | Righe |
+|------|-----------|-------|
+| `1. Intro.md` | Vantaggi imaging digitale, conversione A/D | 67 |
+| `2. Componenti PACS.md` | Architettura, modalità, image server | 166 |
+| `3. Sistema RAID.md` | Tipi RAID, parità XOR, dimensionamento | 176 |
+| `4. Backup e Stampanti.md` | Robot DVD, MO, DAT, stampanti DICOM | 168 |
+| `5. Workstation.md` | Monitor, Secondary DICOM | 140 |
+| `6. Rete e Sicurezza.md` | LAN/WAN/VPN, sicurezza, protocollo DICOM | 170 |
+| `7. RIS.md` | Workflow completo, dematerializzazione, firma digitale | 211 |
+
+**Risultato:** Da 71 righe (mal formattate) a **1098 righe** (ben strutturate)
 
 ---
 
@@ -332,7 +347,7 @@ Il piano dettagliato completo si trova in:
 ## FASI OPZIONALI (bassa priorità)
 
 - [ ] **Fase 3.3** - Espansione `2. Interpolazione.../1. Intro.md` (25 righe)
-- [ ] **Fase 5.3** - Espansione Cartella 7 PACS/RIS
+- [x] ~~**Fase 5.3** - Espansione Cartella 7 PACS/RIS~~ ✅ COMPLETATA 01/01/2026
 - [ ] Aggiornare `0. INDICE.md` con nuova numerazione
 
 ---
@@ -405,7 +420,7 @@ summarized_version/
 
 ---
 
-*Ultimo aggiornamento: 31 Dicembre 2025, 16:00*
+*Ultimo aggiornamento: 1 Gennaio 2026, 10:50*
 
 ---
 
