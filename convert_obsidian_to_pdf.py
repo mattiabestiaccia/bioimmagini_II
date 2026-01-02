@@ -2,6 +2,7 @@
 """
 Converte i file Markdown Obsidian in PDF pronti per la stampa.
 Rimuove elementi specifici di Obsidian (navigazione, tag, frontmatter).
+Versione migliorata con migliore formattazione liste e tipografia.
 """
 
 import os
@@ -11,22 +12,64 @@ import shutil
 from pathlib import Path
 
 # Percorsi
-INPUT_DIR = Path("/home/user/bioimmagini_II/bioimmagini_II_obs")
-OUTPUT_DIR = Path("/home/user/bioimmagini_II/bioimmagini_II_obs_pdf")
+INPUT_DIR = Path("/home/brusc/Projects/bioimmagini_positano/bioimmagini_II_obs")
+OUTPUT_DIR = Path("/home/brusc/Projects/bioimmagini_positano/bioimmagini_II_obs_pdf")
 TEMP_DIR = OUTPUT_DIR / "_temp_md"
 
 # File da escludere
 EXCLUDE_FILES = {"Template.md", "RIORGANIZZAZIONE_STATO.md"}
+
+# Template LaTeX per migliore formattazione
+LATEX_HEADER = r"""
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{xcolor}
+
+% Definizione colori per titoli (scala di calore)
+\definecolor{title1}{RGB}{180, 0, 0}      % Rosso scuro - # titoli
+\definecolor{title2}{RGB}{0, 70, 140}     % Blu - ## titoli
+\definecolor{title3}{RGB}{0, 120, 60}     % Verde - ### titoli
+\definecolor{title4}{RGB}{140, 80, 0}     % Arancio scuro - #### titoli
+
+% Configurazione liste con spaziatura migliore
+\setlist[itemize]{itemsep=0.3em, parsep=0.2em, topsep=0.5em}
+\setlist[enumerate]{itemsep=0.3em, parsep=0.2em, topsep=0.5em}
+\setlist[itemize,2]{itemsep=0.2em, parsep=0.1em}
+\setlist[enumerate,2]{itemsep=0.2em, parsep=0.1em}
+
+% Formattazione titoli con colori
+\titleformat{\section}
+  {\normalfont\Large\bfseries\color{title1}}{\thesection}{1em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\color{title2}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\color{title3}}{\thesubsubsection}{1em}{}
+\titleformat{\paragraph}
+  {\normalfont\normalsize\bfseries\color{title4}}{\theparagraph}{1em}{}
+
+% Spaziatura titoli
+\titlespacing*{\section}{0pt}{1.5em}{0.8em}
+\titlespacing*{\subsection}{0pt}{1.2em}{0.6em}
+\titlespacing*{\subsubsection}{0pt}{1em}{0.5em}
+
+% Interlinea leggermente aumentata
+\linespread{1.1}
+"""
 
 
 def clean_markdown(content: str, source_path: Path) -> str:
     """Pulisce il Markdown dagli elementi specifici di Obsidian."""
 
     # 1. Rimuove il frontmatter YAML (tra ---)
-    content = re.sub(r'^---\n.*?\n---\n*', '', content, flags=re.DOTALL)
+    content = re.sub(r'^---\s*\n.*?\n---\s*\n*', '', content, flags=re.DOTALL)
 
-    # 1b. Converte i separatori --- rimanenti in * * * per evitare conflitti YAML
-    content = re.sub(r'^---$', '* * *', content, flags=re.MULTILINE)
+    # 1b. Converte i separatori --- rimanenti in linea orizzontale (più sicuro per pandoc)
+    # Usa pattern più robusto che gestisce spazi e diverse situazioni
+    # Usiamo asterischi per la linea orizzontale (standard markdown)
+    content = re.sub(r'^---\s*$', '\n* * *\n', content, flags=re.MULTILINE)
+    content = re.sub(r'\n---\s*\n', '\n\n* * *\n\n', content)
 
     # 2. Rimuove completamente i callout di navigazione [!nav]
     # Pattern per callout nav con contenuto multiriga
@@ -59,52 +102,131 @@ def clean_markdown(content: str, source_path: Path) -> str:
 
     content = re.sub(r'!\[\[([^\]]+)\]\]', convert_image, content)
 
-    # 5. Converte altri callout in box stilizzati per print
-    # [!tip], [!info], [!warning], [!example], [!note], [!important], [!quote], [!danger], [!summary]
+    # 5. Converte callout in blocchi ben formattati
     def convert_callout(match):
         callout_type = match.group(1).lower()
-        title = match.group(2) if match.group(2) else ""
+        title = match.group(2).strip() if match.group(2) else ""
+        callout_content = match.group(3) if match.group(3) else ""
 
-        # Mappa tipi callout a emoji/simboli per print
+        # Mappa tipi callout
         type_map = {
-            'tip': '**Suggerimento**',
-            'info': '**Info**',
-            'warning': '**Attenzione**',
-            'example': '**Esempio**',
-            'note': '**Nota**',
-            'important': '**Importante**',
-            'quote': '**Citazione**',
-            'danger': '**Pericolo**',
-            'summary': '**Riepilogo**'
+            'tip': '💡 **Suggerimento**',
+            'info': 'ℹ️ **Info**',
+            'warning': '⚠️ **Attenzione**',
+            'example': '📋 **Esempio**',
+            'note': '📝 **Nota**',
+            'important': '❗ **Importante**',
+            'quote': '💬 **Citazione**',
+            'danger': '🚨 **Pericolo**',
+            'summary': '📌 **Riepilogo**'
         }
 
         header = type_map.get(callout_type, f'**{callout_type.title()}**')
-        if title.strip():
-            header = f'{header}: {title.strip()}'
+        if title:
+            header = f'{header}: {title}'
 
-        return f'> {header}\n>'
+        # Pulisce il contenuto del callout (rimuove i > iniziali)
+        lines = callout_content.strip().split('\n')
+        clean_lines = []
+        for line in lines:
+            line = line.strip()
+            if line.startswith('>'):
+                line = line[1:].strip()
+            if line:
+                clean_lines.append(line)
 
-    # Pattern per callout con titolo opzionale
+        # Formatta come lista se contiene elementi separati da -
+        content_text = '\n'.join(clean_lines)
+
+        # Converti elementi inline " - " in lista (ma NON se contiene formule matematiche)
+        if ' - ' in content_text and not content_text.startswith('-') and '$$' not in content_text and '$' not in content_text:
+            items = [item.strip() for item in content_text.split(' - ') if item.strip()]
+            if len(items) > 1:
+                content_text = '\n'.join(f'- {item}' for item in items)
+
+        return f'\n\n> {header}\n>\n> {content_text}\n\n'
+
+    # Pattern per callout completi (header + contenuto)
     content = re.sub(
-        r'> \[!(\w+)\][-+]?\s*([^\n]*)\n>',
+        r'> \[!(\w+)\][-+]?\s*([^\n]*)\n((?:> [^\n]*\n?)*)',
         convert_callout,
         content
     )
 
-    # 6. Rimuove gli hashtag inline (ma mantiene quelli in titoli)
-    # Rimuove solo tag isolati tipo #MRI #TAC non usati come titoli
-    content = re.sub(r'(?<!#)`#[a-zA-Z0-9-]+`', '', content)  # Tag in backtick
+    # 6. NUOVO: Converte pattern "**Label:** - item - item" in liste corrette
+    def convert_inline_list(match):
+        label = match.group(1)
+        items_text = match.group(2)
 
-    # 7. Rimuove righe vuote multiple
+        # NON convertire se contiene formule matematiche
+        if '$$' in items_text or '$' in items_text:
+            return match.group(0)
+
+        # Splitta per " - "
+        items = [item.strip() for item in items_text.split(' - ') if item.strip()]
+
+        if len(items) > 1:
+            # Crea lista markdown corretta
+            list_items = '\n'.join(f'- {item}' for item in items)
+            return f'**{label}:**\n\n{list_items}'
+        else:
+            return match.group(0)  # Ritorna originale se non è una lista
+
+    # Applica conversione per pattern inline
+    content = re.sub(
+        r'\*\*([^*]+):\*\*\s*-\s*(.+?)(?=\n\n|\n\*\*|\n##|\n#|\Z)',
+        convert_inline_list,
+        content,
+        flags=re.DOTALL
+    )
+
+    # 7. Assicura newline prima di ogni list item (- o numero.)
+    # Questo garantisce che pandoc riconosca le liste
+    content = re.sub(r'([^\n])\n(- |\d+\. )', r'\1\n\n\2', content)
+
+    # 8. Assicura spazio dopo titoli prima di liste
+    content = re.sub(r'(#+[^\n]+)\n(- |\d+\. )', r'\1\n\n\2', content)
+
+    # 9. Rimuove gli hashtag inline (ma mantiene quelli in titoli)
+    content = re.sub(r'(?<!#)`#[a-zA-Z0-9-]+`', '', content)
+
+    # 10. Normalizza righe vuote (max 2 consecutive)
     content = re.sub(r'\n{3,}', '\n\n', content)
+
+    # 11. Assicura che le liste nested abbiano indentazione corretta
+    lines = content.split('\n')
+    fixed_lines = []
+    in_list = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith('- ') or re.match(r'^\d+\. ', stripped):
+            in_list = True
+            # Controlla se è un subitem (preceduto da spazi nel sorgente)
+            leading_spaces = len(line) - len(line.lstrip())
+            if leading_spaces >= 2:
+                fixed_lines.append('  ' + stripped)  # Indenta come subitem
+            else:
+                fixed_lines.append(stripped)
+        elif stripped == '' and in_list:
+            fixed_lines.append('')
+        else:
+            in_list = False
+            fixed_lines.append(line)
+
+    content = '\n'.join(fixed_lines)
 
     return content.strip()
 
 
 def convert_to_pdf(md_path: Path, pdf_path: Path, images_dir: Path = None):
-    """Converte un file Markdown in PDF usando pandoc."""
+    """Converte un file Markdown in PDF usando pandoc con formattazione migliorata."""
 
-    # Costruisce il comando pandoc
+    # Crea file header LaTeX temporaneo
+    header_file = md_path.parent / "_header.tex"
+    with open(header_file, 'w', encoding='utf-8') as f:
+        f.write(LATEX_HEADER)
+
+    # Costruisce il comando pandoc con opzioni migliorate
     cmd = [
         'pandoc',
         str(md_path),
@@ -114,7 +236,12 @@ def convert_to_pdf(md_path: Path, pdf_path: Path, images_dir: Path = None):
         '-V', 'fontsize=11pt',
         '-V', 'documentclass=article',
         '-V', 'lang=it',
+        '-V', 'mainfont=DejaVu Serif',
+        '-V', 'sansfont=DejaVu Sans',
+        '-V', 'monofont=DejaVu Sans Mono',
         '--highlight-style=tango',
+        '-H', str(header_file),
+        '--wrap=preserve',  # Preserva line breaks
     ]
 
     # Aggiunge la directory delle risorse se specificata
@@ -128,15 +255,24 @@ def convert_to_pdf(md_path: Path, pdf_path: Path, images_dir: Path = None):
             text=True,
             timeout=120
         )
+
+        # Rimuovi header temporaneo
+        if header_file.exists():
+            header_file.unlink()
+
         if result.returncode != 0:
             print(f"  Errore pandoc: {result.stderr[:500]}")
             return False
         return True
     except subprocess.TimeoutExpired:
         print(f"  Timeout durante la conversione")
+        if header_file.exists():
+            header_file.unlink()
         return False
     except Exception as e:
         print(f"  Errore: {e}")
+        if header_file.exists():
+            header_file.unlink()
         return False
 
 
