@@ -12,12 +12,29 @@ import shutil
 from pathlib import Path
 
 # Percorsi
-INPUT_DIR = Path("/home/brusc/Projects/bioimmagini_positano/bioimmagini_II_obs")
-OUTPUT_DIR = Path("/home/brusc/Projects/bioimmagini_positano/bioimmagini_II_obs_pdf")
+INPUT_DIR = Path("/home/brusc/Projects/bioimmagini_positano/dispense_obs")
+OUTPUT_DIR = Path("/home/brusc/Projects/bioimmagini_positano/dispense_pdf")
 TEMP_DIR = OUTPUT_DIR / "_temp_md"
 
 # File da escludere
 EXCLUDE_FILES = {"Template.md", "RIORGANIZZAZIONE_STATO.md"}
+
+# Cache globale delle immagini (popolata all'avvio)
+IMAGE_INDEX = {}
+
+
+def build_image_index():
+    """Costruisce un indice globale di tutte le immagini nel vault."""
+    global IMAGE_INDEX
+    for img_path in INPUT_DIR.rglob("*.png"):
+        IMAGE_INDEX[img_path.name] = img_path
+    for img_path in INPUT_DIR.rglob("*.jpg"):
+        IMAGE_INDEX[img_path.name] = img_path
+    for img_path in INPUT_DIR.rglob("*.jpeg"):
+        IMAGE_INDEX[img_path.name] = img_path
+    for img_path in INPUT_DIR.rglob("*.gif"):
+        IMAGE_INDEX[img_path.name] = img_path
+    print(f"Indicizzate {len(IMAGE_INDEX)} immagini nel vault")
 
 # Template LaTeX per migliore formattazione
 LATEX_HEADER = r"""
@@ -79,28 +96,35 @@ def clean_markdown(content: str, source_path: Path) -> str:
         content
     )
 
-    # 3. Converte i link wiki [[file|testo]] in solo testo
+    # 3. Converte le immagini embed ![[image.png]] in formato standard
+    # IMPORTANTE: deve essere eseguito PRIMA della conversione wiki link
+    # altrimenti ![[image.png]] diventa !image.png
+    found_images = []
+
+    def convert_image(match):
+        img_name = match.group(1)
+        # Usa l'indice globale per trovare l'immagine
+        if img_name in IMAGE_INDEX:
+            img_path = IMAGE_INDEX[img_name]
+            found_images.append(img_path)
+            # Usa path assoluto per pandoc
+            return f'![{img_name}]({img_path.absolute()})'
+        # Fallback: cerca nella cartella images relativa
+        source_dir = source_path.parent
+        img_path = source_dir / "images" / img_name
+        if img_path.exists():
+            found_images.append(img_path)
+            return f'![{img_name}]({img_path.absolute()})'
+        # Se non trovata, ritorna placeholder
+        return f'[Immagine non trovata: {img_name}]'
+
+    content = re.sub(r'!\[\[([^\]]+)\]\]', convert_image, content)
+
+    # 4. Converte i link wiki [[file|testo]] in solo testo
     # Prima gestisce [[file#anchor|testo]]
     content = re.sub(r'\[\[[^\]|]+\|([^\]]+)\]\]', r'\1', content)
     # Poi gestisce [[file]] senza testo alternativo
     content = re.sub(r'\[\[([^\]|#]+)(?:#[^\]|]*)?\]\]', r'\1', content)
-
-    # 4. Converte le immagini embed ![[image.png]] in formato standard
-    def convert_image(match):
-        img_name = match.group(1)
-        # Cerca l'immagine nella cartella images relativa al file sorgente
-        source_dir = source_path.parent
-        img_path = source_dir / "images" / img_name
-        if img_path.exists():
-            return f'![{img_name}]({img_path})'
-        # Prova anche nella stessa cartella
-        img_path = source_dir / img_name
-        if img_path.exists():
-            return f'![{img_name}]({img_path})'
-        # Ritorna comunque un riferimento
-        return f'![{img_name}](images/{img_name})'
-
-    content = re.sub(r'!\[\[([^\]]+)\]\]', convert_image, content)
 
     # 5. Converte callout in blocchi ben formattati
     def convert_callout(match):
@@ -315,6 +339,9 @@ def main():
     print("=" * 60)
     print("Conversione Obsidian Markdown -> PDF")
     print("=" * 60)
+
+    # Costruisce indice globale delle immagini
+    build_image_index()
 
     # Crea directory temporanea
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
