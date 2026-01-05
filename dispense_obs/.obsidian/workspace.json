@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "0e5bd501602fdec1",
+        "id": "f4400cb6907385e2",
         "type": "tabs",
         "children": [
           {
-            "id": "272324350144a3cf",
+            "id": "9483c255445fccea",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "5. Registrazione e Fusione di Immagini/5. Ottimizzatori Globali.md",
+                "file": "5. Registrazione e Fusione di Immagini/3. Mutua Informazione.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "5. Ottimizzatori Globali"
+              "title": "3. Mutua Informazione"
             }
           }
         ]
@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 323.5087547302246
+    "width": 251.5
   },
   "right": {
     "id": "778e9e44ebbb9fe2",
@@ -94,6 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "5. Registrazione e Fusione di Immagini/3. Mutua Informazione.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -103,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks"
+              "title": "Backlinks for 3. Mutua Informazione"
             }
           },
           {
@@ -169,12 +170,11 @@
               "title": "Connections"
             }
           }
-        ],
-        "currentTab": 5
+        ]
       }
     ],
     "direction": "horizontal",
-    "width": 200,
+    "width": 485.5,
     "collapsed": true
   },
   "left-ribbon": {
@@ -195,44 +195,46 @@
       "templater-obsidian:Templater": false
     }
   },
-  "active": "272324350144a3cf",
+  "active": "9483c255445fccea",
   "lastOpenFiles": [
-    "5. Registrazione e Fusione di Immagini/4. Fusione di Immagini.md",
-    "Pasted image 20251230170149.png",
-    "5. Registrazione e Fusione di Immagini/3. Esempi registrazione.md",
-    "5. Registrazione e Fusione di Immagini/2. Registrazione di Immagini.md",
+    "5. Registrazione e Fusione di Immagini/2. Concetti Fondamentali Registrazione.md",
     "5. Registrazione e Fusione di Immagini/1. Intro.md",
-    "4. Validazione degli Algoritmi di Analisi dell’Immagine/6. Valutazione di un software ad uso diagnostico.md",
-    "4. Validazione degli Algoritmi di Analisi dell’Immagine/5. Misura dell’efficacia diagnostica.md",
-    "4. Validazione degli Algoritmi di Analisi dell’Immagine/4. Test di significatività.md",
-    "4. Validazione degli Algoritmi di Analisi dell’Immagine/3. Misure statistiche di precisione e riproducibilità.md",
-    "Pasted image 20251230165400.png",
-    "4. Validazione degli Algoritmi di Analisi dell’Immagine/2. Valutazione degli algoritmi di segmentazione.md",
-    "Template.md",
-    "temporary.md",
-    "4. Validazione degli Algoritmi di Analisi dell’Immagine/1. Intro.md",
-    "3. Segmentaione dell'Immagine Biomedica/2. Machine Learning.md",
-    "1. Modello dell'immagine biomedica e misure di qualità/1. Dal Post-procesing all'Analisi dell'Immagine.md",
-    "6. Classificazione dell’immagine Biomedica/1. Intro.md",
-    "5. Registrazione e Fusione di Immagini/6. Evolutionary Computation.md",
-    "5. Registrazione e Fusione di Immagini/5. Ottimizzatori Globali.md",
-    "5. Registrazione e Fusione di Immagini/images/Pasted image 20251202214757.png",
+    "4. Validazione degli Algoritmi di Analisi dell'Immagine/5b. Certificazione Dispositivi Medici.md",
+    "4. Validazione degli Algoritmi di Analisi dell'Immagine/5. Valutazione Algoritmi Software.md",
+    "4. Validazione degli Algoritmi di Analisi dell'Immagine/4. Test Statistici e Diagnosi.md",
+    "4. Validazione degli Algoritmi di Analisi dell'Immagine/3. Misure statistiche di precisione e riproducibilità.md",
+    "4. Validazione degli Algoritmi di Analisi dell'Immagine/2. Valutazione degli algoritmi di segmentazione.md",
+    "4. Validazione degli Algoritmi di Analisi dell'Immagine/1. Intro.md",
+    "3. Segmentaione dell'Immagine Biomedica/4. Segmentazione Regioni e Contorni.md",
+    "3. Segmentaione dell'Immagine Biomedica/3. Algoritmi di Clustering.md",
+    "3. Segmentaione dell'Immagine Biomedica/2. Fondamenti Machine Learning.md",
     "3. Segmentaione dell'Immagine Biomedica/1. Intro.md",
     "2. Interpolazione, Filtraggio e Compressione/5. Super-Resolution.md",
     "2. Interpolazione, Filtraggio e Compressione/4. Compressione.md",
     "2. Interpolazione, Filtraggio e Compressione/3. Filtraggio.md",
-    "1. Modello dell'immagine biomedica e misure di qualità/images/Pasted image 20251201194526.png",
     "2. Interpolazione, Filtraggio e Compressione/2. Interpolazione.md",
-    "2. Interpolazione, Filtraggio e Compressione/images/Pasted image 20251129163958.png",
     "2. Interpolazione, Filtraggio e Compressione/1. Intro.md",
+    "1. Modello dell'immagine biomedica e misure di qualità/6. Case Study - Bando CONSIP per Scanner MRI.md",
+    "1. Modello dell'immagine biomedica e misure di qualità/5. Qualità dell'immagine Biomedica.md",
+    "1. Modello dell'immagine biomedica e misure di qualità/4. Modello dell'Immagine Biomedica.md",
+    "1. Modello dell'immagine biomedica e misure di qualità/3. Computer Vision e Analisi dell'Immagine Biomedica.md",
     "1. Modello dell'immagine biomedica e misure di qualità/2. Definizione di Immagine Biomedica.md",
-    "7. Sistemi PACS e RIS/2. Sistemi PACS.md",
-    "7. Sistemi PACS e RIS/images/Pasted image 20251201192725.png",
-    "7. Sistemi PACS e RIS/images/Pasted image 20251201193032.png",
+    "1. Modello dell'immagine biomedica e misure di qualità/1. Dal Post-procesing all'Analisi dell'Immagine.md",
+    "1. Modello dell'immagine biomedica e misure di qualità/4. Modello dell'Immagine Biomedica 1.md",
+    "7. Sistemi PACS e RIS/7. RIS.md",
+    "7. Sistemi PACS e RIS/6. Rete e Sicurezza.md",
+    "Pasted image 20260105170110.png",
+    "4. Validazione degli Algoritmi di Analisi dell'Immagine/images/Pasted image 20260105162349.png",
+    "3. Segmentaione dell'Immagine Biomedica/images/Pasted image 20260105161037.png",
+    "3. Segmentaione dell'Immagine Biomedica/images/Pasted image 20260105161027.png",
+    "3. Segmentaione dell'Immagine Biomedica/images/Pasted image 20260105160929.png",
+    "3. Segmentaione dell'Immagine Biomedica/images/Pasted image 20260105160745.png",
+    "3. Segmentaione dell'Immagine Biomedica/images/Pasted image 20260105160625.png",
+    "3. Segmentaione dell'Immagine Biomedica/images/Pasted image 20260104193335.png",
+    "3. Segmentaione dell'Immagine Biomedica/images/Pasted image 20260104192756.png",
+    "3. Segmentaione dell'Immagine Biomedica/images/Pasted image 20260104185542.png",
+    "6. Classificazione dell'immagine Biomedica",
     "7. Sistemi PACS e RIS/images",
-    "7. Sistemi PACS e RIS/images/Pasted image 20251201192930.png",
-    "7. Sistemi PACS e RIS/images/Pasted image 20251201192915.png",
-    "7. Sistemi PACS e RIS/images/Pasted image 20251201192854.png",
     "7. Sistemi PACS e RIS",
     "6. Classificazione dell’immagine Biomedica/images",
     "6. Classificazione dell’immagine Biomedica",
@@ -241,7 +243,6 @@
     "5. Registrazione e Fusione di Immagini",
     "4. Validazione degli Algoritmi di Analisi dell’Immagine/images",
     "4. Validazione degli Algoritmi di Analisi dell’Immagine",
-    "bioimmagini_II/matherials",
     "Untitled.canvas"
   ]
 }
