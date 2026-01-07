@@ -91,10 +91,19 @@ def main():
     print(f"  Iterazioni: {results['nit']}, Eval: {results['nfev']}")
 
     # Errori
+    # Per roto-traslazione T = Trans(t) ∘ Rot(θ), l'inversa è:
+    # T^(-1) = Rot(-θ) ∘ Trans(-Rot(-θ)·t)
+    # Quindi la traslazione attesa nell'inversa è -R(-θ)·(tx,ty)
     print("\n[5/6] Analisi errori...")
-    error_tx = tx_reg - (-tx_sim)
-    error_ty = ty_reg - (-ty_sim)
-    error_angle = angle_reg - (-angle_sim)
+    angle_rad = np.deg2rad(-angle_sim)
+    cos_a, sin_a = np.cos(angle_rad), np.sin(angle_rad)
+    tx_expected = -(cos_a * tx_sim - sin_a * ty_sim)
+    ty_expected = -(sin_a * tx_sim + cos_a * ty_sim)
+    angle_expected = -angle_sim
+
+    error_tx = tx_reg - tx_expected
+    error_ty = ty_reg - ty_expected
+    error_angle = angle_reg - angle_expected
 
     print(f"  Errore tx: {error_tx:.2f} pixel")
     print(f"  Errore ty: {error_ty:.2f} pixel")

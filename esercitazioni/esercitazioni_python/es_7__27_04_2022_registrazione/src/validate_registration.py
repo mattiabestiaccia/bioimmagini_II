@@ -85,9 +85,15 @@ def main():
         # Registrazione
         res = register_with_differential_evolution(t1, pd_mis, maxiter=args.maxiter, popsize=10, verbose=False)
 
-        # Salva
-        tx_true.append(-tx_s)
-        ty_true.append(-ty_s)
+        # Calcola traslazione attesa per l'inversa
+        # T^(-1) = Rot(-θ) ∘ Trans(-Rot(-θ)·t)
+        angle_rad = np.deg2rad(-ang_s)
+        cos_a, sin_a = np.cos(angle_rad), np.sin(angle_rad)
+        tx_exp = -(cos_a * tx_s - sin_a * ty_s)
+        ty_exp = -(sin_a * tx_s + cos_a * ty_s)
+
+        tx_true.append(tx_exp)
+        ty_true.append(ty_exp)
         angle_true.append(-ang_s)
 
         tx_est.append(res['tx'])

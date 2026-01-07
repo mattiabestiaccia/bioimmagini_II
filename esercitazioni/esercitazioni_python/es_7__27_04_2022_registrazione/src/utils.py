@@ -20,7 +20,7 @@ Date: 2025-11-20
 import numpy as np
 from pathlib import Path
 from typing import Tuple, Dict, Optional
-from scipy.ndimage import affine_transform, map_coordinates
+from scipy.ndimage import affine_transform, map_coordinates, shift, rotate
 from scipy.optimize import differential_evolution
 from sklearn.metrics import mutual_info_score
 import warnings
@@ -137,45 +137,33 @@ def apply_rigid_transform_2d(
     """
     Applica trasformazione rigida 2D (roto-traslazione).
 
+    Ordine operazioni: prima rotazione (attorno al centro), poi traslazione.
+
     Args:
         image: Immagine 2D
-        tx, ty: Traslazione in pixel
-        angle_deg: Rotazione in gradi
+        tx: Traslazione orizzontale in pixel (positivo = destra)
+        ty: Traslazione verticale in pixel (positivo = basso)
+        angle_deg: Rotazione in gradi (positivo = antiorario)
         order: Ordine interpolazione (0=NN, 1=linear, 3=cubic)
 
     Returns:
         image_transformed: Immagine trasformata
     """
-    h, w = image.shape
-    center = np.array([h / 2, w / 2])
-
-    # Converti angolo a radianti
-    angle_rad = np.deg2rad(angle_deg)
-
-    # Matrice rotazione 2D
-    cos_a = np.cos(angle_rad)
-    sin_a = np.sin(angle_rad)
-
-    # Matrice affine: prima ruota attorno al centro, poi trasla
-    # Trasformazione inversa per scipy.ndimage
-    # 1. Trasla centro a origine
-    # 2. Ruota
-    # 3. Trasla indietro + traslazione voluta
-
-    # Matrice rotazione
-    rot_matrix = np.array([
-        [cos_a, -sin_a],
-        [sin_a, cos_a]
-    ])
-
-    # Offset per rotazione attorno al centro
-    offset = center - np.dot(rot_matrix, center) + np.array([ty, tx])
-
-    # Applica trasformazione
-    image_transformed = affine_transform(
+    # Prima ruota attorno al centro
+    image_rotated = rotate(
         image,
-        rot_matrix.T,  # scipy usa trasposta
-        offset=offset,
+        angle_deg,
+        reshape=False,
+        order=order,
+        mode='constant',
+        cval=0.0
+    )
+
+    # Poi trasla: shift([row_shift, col_shift])
+    # ty = shift verticale (righe), tx = shift orizzontale (colonne)
+    image_transformed = shift(
+        image_rotated,
+        [ty, tx],
         order=order,
         mode='constant',
         cval=0.0
@@ -188,7 +176,8 @@ def compute_mutual_information(
     image1: np.ndarray,
     image2: np.ndarray,
     bins: int = 256,
-    normalized: bool = True
+    normalized: bool = True,
+    min_overlap_fraction: float = 0.3
 ) -> float:
     """
     Calcola Mutual Information tra due immagini.
@@ -202,6 +191,7 @@ def compute_mutual_information(
         image2: Seconda immagine
         bins: Numero bin per istogramma (default 256)
         normalized: Se True, normalizza MI in [0,1]
+        min_overlap_fraction: Frazione minima di sovrapposizione richiesta (default 0.3)
 
     Returns:
         mi: Mutual Information
@@ -209,7 +199,19 @@ def compute_mutual_information(
     # Maschera parti valide (entrambe non zero)
     mask = (image1 > 0) & (image2 > 0)
 
-    if np.sum(mask) == 0:
+    # Conta pixel validi in ciascuna immagine
+    valid_img1 = np.sum(image1 > 0)
+    valid_img2 = np.sum(image2 > 0)
+    overlap = np.sum(mask)
+
+    # Penalizza se sovrapposizione troppo bassa
+    # Usa il minimo tra le due immagini come riferimento
+    if valid_img1 > 0 and valid_img2 > 0:
+        overlap_fraction = overlap / min(valid_img1, valid_img2)
+        if overlap_fraction < min_overlap_fraction:
+            return 0.0
+
+    if overlap == 0:
         return 0.0
 
     # Estrai valori validi
@@ -255,7 +257,8 @@ def compute_mutual_information(
 def fitness_function_mi(
     params: np.ndarray,
     fixed_image: np.ndarray,
-    moving_image: np.ndarray
+    moving_image: np.ndarray,
+    min_overlap_fraction: float = 0.5
 ) -> float:
     """
     Fitness function per GA: -MI (massimizzazione MI = minimizzazione -MI).
@@ -264,9 +267,10 @@ def fitness_function_mi(
         params: Array [tx, ty, angle] parametri trasformazione
         fixed_image: Immagine fissa di riferimento
         moving_image: Immagine mobile da registrare
+        min_overlap_fraction: Minima sovrapposizione richiesta
 
     Returns:
-        fitness: -MI (negativo per massimizzare MI)
+        fitness: -MI (negativo per massimizzare MI), o penalita' alta se sovrapposizione insufficiente
     """
     tx, ty, angle = params
 
@@ -277,8 +281,24 @@ def fitness_function_mi(
         order=0  # Nearest neighbor come da specifiche
     )
 
-    # Calcola MI
-    mi = compute_mutual_information(fixed_image, moving_transformed, bins=64)
+    # Verifica sovrapposizione PRIMA del calcolo MI
+    mask = (fixed_image > 0) & (moving_transformed > 0)
+    valid_fixed = np.sum(fixed_image > 0)
+    valid_moving = np.sum(moving_transformed > 0)
+    overlap = np.sum(mask)
+
+    # Penalizza FORTEMENTE se sovrapposizione insufficiente
+    if valid_fixed > 0 and valid_moving > 0:
+        overlap_fraction = overlap / min(valid_fixed, valid_moving)
+        if overlap_fraction < min_overlap_fraction:
+            # Ritorna penalita' proporzionale alla mancanza di overlap
+            return 1.0 + (min_overlap_fraction - overlap_fraction)
+
+    if overlap == 0:
+        return 2.0
+
+    # Calcola MI (non normalizzata per evitare instabilita')
+    mi = compute_mutual_information(fixed_image, moving_transformed, bins=64, normalized=False)
 
     # Ritorna -MI per minimizzazione
     return -mi
@@ -315,7 +335,7 @@ def register_with_differential_evolution(
         bounds = [
             (-max_trans, max_trans),  # tx
             (-max_trans, max_trans),  # ty
-            (-60.0, 60.0)             # angle
+            (-65.0, 65.0)             # angle (leggermente maggiore del max simulato)
         ]
 
     # Ottimizzazione con Differential Evolution
