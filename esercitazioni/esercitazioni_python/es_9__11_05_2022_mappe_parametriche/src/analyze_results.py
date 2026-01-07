@@ -27,21 +27,24 @@ def main():
     base_dir = Path(__file__).parent.parent
     results_dir = base_dir / 'results'
     
-    patients = ['paziente1', 'paziente2']
+    patients = ['PAZIENTE1', 'PAZIENTE2']
     
-    # Define ROIs (approximate coordinates for demonstration)
-    # In a real scenario, these would be drawn manually or segmented automatically
-    # Coordinates: (x, y)
+    # Define ROIs based on synthetic phantom anatomy
+    # Coordinates: (x, y) = (col, row) for circle plotting
+    # Actual phantom centers (verified from mask analysis):
+    # Septum: row=148, col=128 -> (x=128, y=148)
+    # Liver: row=88, col=208 -> (x=208, y=88)
+    # Muscle: row=98, col=38 -> (x=38, y=98)
     rois_def = {
-        'paziente1': {
-            'septum': {'center': (128, 128), 'radius': 10},  # Septum
-            'liver': {'center': (60, 180), 'radius': 15},    # Liver (approx)
-            'muscle': {'center': (200, 200), 'radius': 10}   # Paraspinal muscle
+        'PAZIENTE1': {
+            'septum': {'center': (128, 148), 'radius': 15},  # Cardiac septum
+            'liver': {'center': (208, 88), 'radius': 20},    # Liver
+            'muscle': {'center': (38, 98), 'radius': 15}     # Skeletal muscle
         },
-        'paziente2': {
-            'septum': {'center': (128, 128), 'radius': 10},
-            'liver': {'center': (60, 180), 'radius': 15},
-            'muscle': {'center': (200, 200), 'radius': 10}
+        'PAZIENTE2': {
+            'septum': {'center': (128, 148), 'radius': 15},
+            'liver': {'center': (208, 88), 'radius': 20},
+            'muscle': {'center': (38, 98), 'radius': 15}
         }
     }
 
