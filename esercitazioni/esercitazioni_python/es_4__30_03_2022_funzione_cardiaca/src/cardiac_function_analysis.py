@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import argparse
 import sys
+from typing import Tuple
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -25,6 +26,7 @@ from utils import (
     load_cardiac_4d,
     find_cardiac_phases,
     create_circular_seed,
+    find_lv_center,
     segment_lv_active_contour,
     refine_segmentation,
     compute_volume_from_masks,
@@ -224,12 +226,12 @@ def plot_volume_curves(edlv: float, eslv: float, output_dir: Path):
         Directory to save plot
     """
     stroke_volume = edlv - eslv
-    ejection_fraction = (stroke_volume / edlv) * 100.0
+    ejection_fraction = (stroke_volume / edlv) * 100.0 if edlv > 0 else 0.0
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
     # Volume bar chart
-    volumes = [edlv, eslv, stroke_volume]
+    volumes = [edlv, eslv, max(0, stroke_volume)]  # Ensure non-negative for display
     labels = ['EDLV', 'ESLV', 'Stroke Volume']
     colors = ['#2E86AB', '#A23B72', '#F18F01']
 
@@ -239,14 +241,15 @@ def plot_volume_curves(edlv: float, eslv: float, output_dir: Path):
     ax1.grid(True, alpha=0.3, axis='y')
 
     # Add value labels on bars
-    for bar, vol in zip(bars, volumes):
+    for bar, vol, orig_vol in zip(bars, volumes, [edlv, eslv, stroke_volume]):
         height = bar.get_height()
         ax1.text(bar.get_x() + bar.get_width()/2., height,
-                f'{vol:.1f} mL', ha='center', va='bottom', fontsize=11, weight='bold')
+                f'{orig_vol:.1f} mL', ha='center', va='bottom', fontsize=11, weight='bold')
 
-    # Ejection fraction pie chart
+    # Ejection fraction pie chart (handle negative EF)
+    ef_display = max(0, min(100, ejection_fraction))  # Clamp to 0-100
     colors_pie = ['#F18F01', '#E0E0E0']
-    ax2.pie([ejection_fraction, 100 - ejection_fraction],
+    ax2.pie([ef_display, 100 - ef_display],
            labels=['Ejected', 'Remaining'],
            colors=colors_pie,
            autopct='%1.1f%%',
@@ -267,10 +270,10 @@ def segment_phase(volume: np.ndarray,
                  phase_name: str,
                  slice_range: range,
                  seed_centers: dict,
-                 seed_radius: int = 30,
+                 seed_radius: int = 20,
                  n_iterations: int = 100,
                  smoothing: float = 2.0,
-                 verbose: bool = True) -> np.ndarray:
+                 verbose: bool = True) -> Tuple[np.ndarray, dict]:
     """
     Segment all slices in a cardiac phase.
 
@@ -285,7 +288,7 @@ def segment_phase(volume: np.ndarray,
     seed_centers : dict
         Dictionary mapping slice index to seed center (y, x)
     seed_radius : int, optional
-        Seed radius (default: 30)
+        Seed radius (default: 20)
     n_iterations : int, optional
         Active contour iterations (default: 100)
     smoothing : float, optional
@@ -297,14 +300,17 @@ def segment_phase(volume: np.ndarray,
     -------
     masks : np.ndarray
         Segmentation masks (n_slices, height, width)
+    used_centers : dict
+        Dictionary mapping slice index to final center used (y, x)
     """
     n_slices, height, width = volume.shape
     masks = np.zeros((n_slices, height, width), dtype=np.uint8)
+    used_centers = {}
 
     if verbose:
         print(f"\nSegmenting {phase_name} phase (slices {slice_range.start}-{slice_range.stop-1})...")
 
-    previous_mask = None
+    previous_center = None
 
     for slice_idx in slice_range:
         if verbose:
@@ -314,15 +320,16 @@ def segment_phase(volume: np.ndarray,
 
         # Get seed for this slice
         if slice_idx in seed_centers:
-            # User-specified seed center
+            # Use provided seed center (from previous phase or user-specified)
             center = seed_centers[slice_idx]
-            seed_mask = create_circular_seed(image.shape, center=center, radius=seed_radius)
-        elif previous_mask is not None:
-            # Use previous slice mask as seed
-            seed_mask = previous_mask
+        elif previous_center is not None:
+            # Use previous slice center (LV position is similar between adjacent slices)
+            center = previous_center
         else:
-            # Default: center seed
-            seed_mask = create_circular_seed(image.shape, center=None, radius=seed_radius)
+            # Find LV center automatically for first slice only
+            center = find_lv_center(image)
+
+        seed_mask = create_circular_seed(image.shape, center=center, radius=seed_radius)
 
         # Segment with active contours
         try:
@@ -333,21 +340,38 @@ def segment_phase(volume: np.ndarray,
                 smoothing=smoothing
             )
 
-            # Refine segmentation
-            mask = refine_segmentation(mask, min_area=100, fill_holes=True)
+            # Refine segmentation - keep only component near seed center
+            mask = refine_segmentation(
+                mask,
+                seed_center=center,
+                min_area=100,
+                max_area=3500,
+                fill_holes=True
+            )
 
             masks[slice_idx] = mask
-            previous_mask = mask
+
+            # Update center for next slice based on current segmentation
+            if np.sum(mask) > 0:
+                from scipy import ndimage as ndi
+                cy, cx = ndi.center_of_mass(mask)
+                previous_center = (int(cy), int(cx))
+            else:
+                previous_center = center
+
+            used_centers[slice_idx] = previous_center
 
             area = np.sum(mask)
             if verbose:
-                print(f"Area: {area:.0f} pixels")
+                print(f"Area: {area:.0f} pixels (center: {previous_center[0]}, {previous_center[1]})")
 
         except Exception as e:
             print(f"Error: {e}")
             masks[slice_idx] = seed_mask  # Fallback to seed
+            previous_center = center
+            used_centers[slice_idx] = center
 
-    return masks
+    return masks, used_centers
 
 
 def main():
@@ -478,14 +502,15 @@ def main():
                          diastolic_frame, systolic_frame, output_dir)
 
     # Segment diastolic phase
-    # Slices 3-14 contain LV cavity in diastole (from PDF)
-    diastolic_slices = range(3, min(14, metadata['n_slices']))
+    # Based on visual inspection: slices 4-11 contain the true LV cavity
+    # (slice 3 shows atrium, slices 12+ show RV or below ventricle)
+    diastolic_slices = range(4, min(12, metadata['n_slices']))
 
-    diastolic_masks = segment_phase(
+    diastolic_masks, diastolic_centers = segment_phase(
         diastolic_volume,
         'Diastolic',
         diastolic_slices,
-        seed_centers={},  # Empty: will use default center
+        seed_centers={},  # Empty: will auto-detect LV center
         seed_radius=args.seed_radius,
         n_iterations=args.n_iterations,
         smoothing=args.smoothing,
@@ -493,14 +518,15 @@ def main():
     )
 
     # Segment systolic phase
-    # Slices 4-13 contain LV cavity in systole (from PDF)
-    systolic_slices = range(4, min(13, metadata['n_slices']))
+    # In systole the heart shortens, so fewer slices contain LV
+    # Use centers from diastolic phase (LV position similar between phases)
+    systolic_slices = range(5, min(11, metadata['n_slices']))
 
-    systolic_masks = segment_phase(
+    systolic_masks, _ = segment_phase(
         systolic_volume,
         'Systolic',
         systolic_slices,
-        seed_centers={},
+        seed_centers=diastolic_centers,  # Use diastolic centers as starting point
         seed_radius=args.seed_radius,
         n_iterations=args.n_iterations,
         smoothing=args.smoothing,
