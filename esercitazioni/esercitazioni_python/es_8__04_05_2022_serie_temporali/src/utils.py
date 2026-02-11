@@ -304,9 +304,10 @@ def demons_step(moving: np.ndarray,
     # Avoid division by zero
     denominator = np.maximum(denominator, 1e-10)
 
-    # Compute displacement update: (F - R) * grad_R / denominator
-    update_y = diff * grad_y / denominator
-    update_x = diff * grad_x / denominator
+    # Compute displacement update: -(F - R) * grad_R / denominator
+    # Negativo perche' vogliamo muovere F verso R (minimizzare F - R)
+    update_y = -diff * grad_y / denominator
+    update_x = -diff * grad_x / denominator
 
     # Update displacement field
     new_disp_y = displacement_field[0] + update_y
